@@ -311,9 +311,14 @@ if (galleryTrack) {
     "touchmove",
     (e) => {
       if (!isDragging) return;
+      // Safari, unlike Chrome, treats a passive touchmove listener as "not
+      // handling this gesture" and can hand it off to its own default
+      // behavior instead of continuing to deliver events to us. Marking this
+      // non-passive and calling preventDefault tells it we're taking over.
+      e.preventDefault();
       moveGalleryTo(e.touches[0].clientX);
     },
-    { passive: true }
+    { passive: false }
   );
   function endGalleryTouchDrag(e) {
     if (!isDragging) return;
