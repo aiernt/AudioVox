@@ -600,9 +600,23 @@ body.modal-open{overflow:hidden;}
   .about-grid,.book-grid{grid-template-columns:1fr;}
   .about-photo{order:-1;max-width:340px;margin:0 auto;}
   .section{padding:72px 0;}
-  .book-text,.tip-card{text-align:center;align-items:center;}
-  .book-actions{justify-content:center;}
+
+  /* Every section's text/content centered on mobile, not just Book/Tip. */
+  .section-inner,.about-text,.book-text,.tip-card,.video-list,.book-actions{
+    text-align:center;align-items:center;
+  }
+  .about-links,.book-actions,.hero-actions,.video-list{justify-content:center;}
   .tip-card .btn{align-self:center;}
+  .cover-bands-grid,.band-members,.gallery-carousel{margin-left:auto;margin-right:auto;}
+
+  /* The About photo's rotate+shift is meant to offset it from a text column
+     that sits beside it on desktop; stacked on mobile there's no column to
+     shift away from, and the sideways shift was pushing it (and the whole
+     page's scrollable width) off the right edge of the screen. */
+  .about-photo-band{transform:rotate(6deg) translateY(2%);}
+  .about-photo-band:hover{
+    transform:rotate(3deg) translateY(2%) scale(1.06) translateY(-2px);
+  }
 }
 @media (max-width:480px){
   .hero-actions{flex-direction:column;align-items:stretch;}
