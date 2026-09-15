@@ -357,11 +357,13 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 }
 .gallery-track.dragging{cursor:grabbing;transition:none;}
 .gallery-photo{
-  width:100%;aspect-ratio:4/3;object-fit:cover;
+  width:100%;aspect-ratio:4/3;
+  background-color:var(--black-3);
+  background-size:cover;background-position:center;background-repeat:no-repeat;
   border:1px solid rgba(224,17,40,.25);
   transition:transform .2s ease, filter .2s ease;
   filter:grayscale(.15) contrast(1.05);
-  -webkit-user-drag:none;touch-action:pan-y;
+  touch-action:pan-y;
   -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
 }
 .gallery-photo:hover{filter:none;}

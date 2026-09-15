@@ -206,21 +206,37 @@ const GALLERY_COLS = Math.ceil(GALLERY_IMAGES.length / 2);
 let gallerySuppressClick = false;
 
 if (galleryTrack) {
+  // These are plain divs with a CSS background-image, not <img> elements.
+  // iOS Safari treats a real <img> as a natively "pick-up-able" object (for
+  // cross-app drag & drop / save-image), and the first touch on one gets
+  // consumed by that system deciding whether it's a native drag before our
+  // own touch handlers get a clean shot at it - requiring an extra "priming"
+  // tap before dragging would work. Divs aren't subject to that at all.
   for (let copy = 0; copy < 3; copy++) {
     GALLERY_IMAGES.forEach(({ file, alt }) => {
-      const img = document.createElement("img");
-      img.src = `images/gallery/${file}`;
-      img.alt = alt;
-      img.loading = "lazy";
-      img.draggable = false;
-      img.className = "photo-fallback gallery-photo photo-frame";
-      // TEMPORARILY DISABLED for testing whether tap-to-open-lightbox is
-      // interfering with touch-drag on iOS. Re-enable once drag is confirmed
-      // solid: if (copy === 1) img.classList.add("lightbox-trigger");
-      img.dataset.lightboxGroup = "gallery";
-      img.dataset.fallbackLabel = `images/gallery/${file}`;
-      bindPhotoFallback(img);
-      galleryTrack.appendChild(img);
+      const src = `images/gallery/${file}`;
+      const tile = document.createElement("div");
+      tile.className = "photo-fallback gallery-photo photo-frame";
+      if (copy === 1) tile.classList.add("lightbox-trigger");
+      tile.setAttribute("role", "img");
+      tile.setAttribute("aria-label", alt);
+      tile.dataset.lightboxGroup = "gallery";
+      tile.dataset.fallbackLabel = src;
+      tile.dataset.src = src;
+      tile.dataset.alt = alt;
+      galleryTrack.appendChild(tile);
+
+      const preload = new Image();
+      preload.onload = () => {
+        tile.style.backgroundImage = `url("${src}")`;
+      };
+      preload.onerror = () => {
+        const span = document.createElement("span");
+        span.textContent = `Drop a photo here: ${src}`;
+        span.className = tile.className + " is-missing";
+        tile.replaceWith(span);
+      };
+      preload.src = src;
     });
   }
 
@@ -371,9 +387,11 @@ let lightboxIndex = 0;
 function showLightboxPhoto(index) {
   if (!lightboxPhotos.length) return;
   lightboxIndex = (index + lightboxPhotos.length) % lightboxPhotos.length;
-  const img = lightboxPhotos[lightboxIndex];
-  lightboxImg.src = img.currentSrc || img.src;
-  lightboxImg.alt = img.alt || "";
+  const el = lightboxPhotos[lightboxIndex];
+  // Gallery tiles are plain divs with a background-image (see the gallery
+  // section below for why), everything else is a real <img>.
+  lightboxImg.src = el.dataset.src || el.currentSrc || el.src || "";
+  lightboxImg.alt = el.dataset.alt || el.alt || "";
 }
 
 function openLightbox(img) {
@@ -401,7 +419,7 @@ document.addEventListener("click", (e) => {
     return;
   }
   const trigger = e.target.closest(".lightbox-trigger:not(.is-missing)");
-  if (trigger && trigger.tagName === "IMG") openLightbox(trigger);
+  if (trigger) openLightbox(trigger);
 });
 lightboxClose.addEventListener("click", closeLightbox);
 lightboxPrev.addEventListener("click", () => showLightboxPhoto(lightboxIndex - 1));
