@@ -217,7 +217,9 @@ if (galleryTrack) {
       const src = `images/gallery/${file}`;
       const tile = document.createElement("div");
       tile.className = "photo-fallback gallery-photo photo-frame";
-      if (copy === 1) tile.classList.add("lightbox-trigger");
+      // TEMPORARILY DISABLED again to isolate the drag issue now that these
+      // are divs instead of img elements:
+      // if (copy === 1) tile.classList.add("lightbox-trigger");
       tile.setAttribute("role", "img");
       tile.setAttribute("aria-label", alt);
       tile.dataset.lightboxGroup = "gallery";
