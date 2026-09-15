@@ -1,3 +1,15 @@
+// ---------- Temporary touch debug overlay (add ?debug=1 to the URL) ----------
+const touchDebugEl = document.getElementById("touch-debug");
+const touchDebugOn = new URLSearchParams(location.search).has("debug");
+if (touchDebugOn && touchDebugEl) touchDebugEl.hidden = false;
+function touchDebug(msg) {
+  if (!touchDebugOn || !touchDebugEl) return;
+  const p = document.createElement("p");
+  p.textContent = `${new Date().toISOString().slice(11, 23)}  ${msg}`;
+  touchDebugEl.appendChild(p);
+  touchDebugEl.scrollTop = touchDebugEl.scrollHeight;
+}
+
 // ---------- Bands we cover ----------
 const BANDS = [
   { artist: "Stone Temple Pilots", image: "stone-temple-pilots.jpg" },
@@ -293,6 +305,7 @@ if (galleryTrack) {
     finishGalleryDrag(e.clientX);
   }
   galleryTrack.addEventListener("pointerdown", (e) => {
+    touchDebug(`pointerdown type=${e.pointerType} button=${e.button}`);
     if (e.pointerType !== "mouse") return;
     if (e.button !== 0) return;
     startGalleryDrag(e.clientX);
@@ -304,12 +317,16 @@ if (galleryTrack) {
   // Touch (native Touch Events).
   galleryTrack.addEventListener(
     "touchstart",
-    (e) => startGalleryDrag(e.touches[0].clientX),
+    (e) => {
+      touchDebug(`touchstart target=${e.target.tagName} touches=${e.touches.length}`);
+      startGalleryDrag(e.touches[0].clientX);
+    },
     { passive: true }
   );
   galleryTrack.addEventListener(
     "touchmove",
     (e) => {
+      touchDebug(`touchmove isDragging=${isDragging} x=${Math.round(e.touches[0].clientX)}`);
       if (!isDragging) return;
       // Safari, unlike Chrome, treats a passive touchmove listener as "not
       // handling this gesture" and can hand it off to its own default
@@ -321,6 +338,7 @@ if (galleryTrack) {
     { passive: false }
   );
   function endGalleryTouchDrag(e) {
+    touchDebug(`${e.type} isDragging=${isDragging}`);
     if (!isDragging) return;
     finishGalleryDrag(e.changedTouches[0].clientX);
   }
