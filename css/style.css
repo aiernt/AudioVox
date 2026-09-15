@@ -16,7 +16,7 @@
 }
 
 *,*::before,*::after{box-sizing:border-box;}
-html{scroll-behavior:smooth;}
+html{scroll-behavior:smooth;overflow-x:hidden;}
 body{
   margin:0;
   background:var(--black);
@@ -378,13 +378,13 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   z-index:2;box-shadow:0 6px 16px rgba(0,0,0,.5);
 }
 .gallery-nav:hover{background:var(--red);border-color:var(--red);}
-.gallery-prev{left:-10px;}
-.gallery-next{right:-10px;}
+.gallery-prev{left:0;}
+.gallery-next{right:0;}
 @media (max-width:600px){
   .gallery-track{grid-auto-columns:150px;gap:12px;}
   .gallery-nav{width:36px;height:36px;font-size:1rem;}
-  .gallery-prev{left:-4px;}
-  .gallery-next{right:-4px;}
+  .gallery-prev{left:2px;}
+  .gallery-next{right:2px;}
 }
 
 /* ---------- Setlist (bands we cover) ---------- */
