@@ -501,26 +501,3 @@ if (openBookingBtn) {
 
 // ---------- Footer year ----------
 document.getElementById("year").textContent = new Date().getFullYear();
-
-// ---------- Temporary overflow finder (?debug=1) ----------
-// Scans every element and reports any that extend past the screen edge,
-// to pin down exactly what's causing horizontal page scroll on mobile.
-if (touchDebugOn) {
-  window.addEventListener("load", () => {
-    setTimeout(() => {
-      const vw = document.documentElement.clientWidth;
-      touchDebug(`--- overflow scan: viewport width=${vw}, doc scrollWidth=${document.documentElement.scrollWidth} ---`);
-      let found = 0;
-      document.querySelectorAll("body *").forEach((el) => {
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) return;
-        if (rect.right > vw + 1 || rect.left < -1) {
-          found++;
-          const label = el.id ? `#${el.id}` : el.className ? `.${String(el.className).split(" ").join(".")}` : el.tagName;
-          touchDebug(`OVERFLOW <${el.tagName.toLowerCase()}${label ? " " + label : ""}> left=${Math.round(rect.left)} right=${Math.round(rect.right)}`);
-        }
-      });
-      if (!found) touchDebug("--- no overflowing elements found ---");
-    }, 500);
-  });
-}
