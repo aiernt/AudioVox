@@ -217,7 +217,9 @@ if (galleryTrack) {
       const src = `images/gallery/${file}`;
       const tile = document.createElement("div");
       tile.className = "photo-fallback gallery-photo photo-frame";
-      if (copy === 1) tile.classList.add("lightbox-trigger");
+      // Lightbox left OFF on purpose until drag is confirmed working - do
+      // not re-enable without checking first.
+      // if (copy === 1) tile.classList.add("lightbox-trigger");
       tile.setAttribute("role", "img");
       tile.setAttribute("aria-label", alt);
       tile.dataset.lightboxGroup = "gallery";
