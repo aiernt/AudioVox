@@ -274,7 +274,9 @@ if (galleryTrack) {
   }
 
   galleryTrack.addEventListener("pointerdown", (e) => {
-    if (e.button !== undefined && e.button !== 0) return;
+    // Some WebKit/iOS versions report button as -1 (not 0) for touch pointers,
+    // so only gate on button for an actual mouse - touch/pen always proceed.
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     isDragging = true;
     gallerySuppressClick = false;
     dragStartX = e.clientX;
