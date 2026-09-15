@@ -338,8 +338,15 @@ if (galleryTrack) {
     { passive: false }
   );
   function endGalleryTouchDrag(e) {
-    touchDebug(`${e.type} isDragging=${isDragging}`);
+    touchDebug(`${e.type} isDragging=${isDragging} suppress=${gallerySuppressClick}`);
     if (!isDragging) return;
+    // If real movement happened, stop the browser from synthesizing a click
+    // at all - relying only on the gallerySuppressClick flag (checked later,
+    // in the separate document click listener) leaves a timing gap on iOS
+    // Safari where a click can slip through and pop the lightbox open
+    // mid-drag, which looks exactly like something appearing on top of the
+    // photos.
+    if (gallerySuppressClick && e.cancelable) e.preventDefault();
     finishGalleryDrag(e.changedTouches[0].clientX);
   }
   galleryTrack.addEventListener("touchend", endGalleryTouchDrag);
