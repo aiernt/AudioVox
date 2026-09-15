@@ -214,7 +214,9 @@ if (galleryTrack) {
       img.loading = "lazy";
       img.draggable = false;
       img.className = "photo-fallback gallery-photo photo-frame";
-      if (copy === 1) img.classList.add("lightbox-trigger");
+      // TEMPORARILY DISABLED for testing whether tap-to-open-lightbox is
+      // interfering with touch-drag on iOS. Re-enable once drag is confirmed
+      // solid: if (copy === 1) img.classList.add("lightbox-trigger");
       img.dataset.lightboxGroup = "gallery";
       img.dataset.fallbackLabel = `images/gallery/${file}`;
       bindPhotoFallback(img);
