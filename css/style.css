@@ -312,13 +312,19 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   box-shadow:0 10px 26px rgba(0,0,0,.55);
   transition:transform .25s ease, box-shadow .25s ease;
 }
-.photo-frame:hover{
-  transform:scale(1.06) translateY(-2px);
-  box-shadow:0 20px 44px rgba(224,17,40,.4);
-  z-index:3;
-}
 .photo-frame.is-missing{padding:0;box-shadow:none;cursor:default;}
-.photo-frame.is-missing:hover{transform:none;box-shadow:none;}
+/* Hover-swell only on devices with a real pointer. iOS treats a first tap on
+   any element with :hover CSS as "resolve hover state" before it'll let a
+   drag gesture proceed, which was silently eating the first touch on the
+   gallery and forcing an extra tap before dragging worked. */
+@media (hover:hover){
+  .photo-frame:hover{
+    transform:scale(1.06) translateY(-2px);
+    box-shadow:0 20px 44px rgba(224,17,40,.4);
+    z-index:3;
+  }
+  .photo-frame.is-missing:hover{transform:none;box-shadow:none;}
+}
 
 /* ---------- Meet the Band ---------- */
 .band-grid{margin-top:64px;}
@@ -366,8 +372,10 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   touch-action:pan-y;
   -webkit-touch-callout:none;-webkit-user-select:none;user-select:none;
 }
-.gallery-photo:hover{filter:none;}
-.gallery-track .photo-frame:hover{transform:scale(1.03);z-index:3;}
+@media (hover:hover){
+  .gallery-photo:hover{filter:none;}
+  .gallery-track .photo-frame:hover{transform:scale(1.03);z-index:3;}
+}
 .gallery-track .photo-fallback.is-missing{
   aspect-ratio:4/3;font-size:.8rem;padding:12px;text-align:center;
 }
