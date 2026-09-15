@@ -243,50 +243,84 @@ if (galleryTrack) {
   galleryNextBtn.addEventListener("click", () => slideGallery(1));
 
   // ---------- Drag / swipe ----------
+  // Mouse dragging uses Pointer Events. Touch uses plain Touch Events instead
+  // of Pointer Events - iOS Safari's pointer-event support for custom drag
+  // gestures has proven unreliable in practice, while touchstart/move/end are
+  // the long-standing, dependable way to do this on iOS.
   let isDragging = false;
   let dragStartX = 0;
   let dragStartCol = 0;
   const DRAG_CLICK_THRESHOLD = 6;
 
-  // Listeners for move/up are attached to window (not captured on the track)
-  // so the browser's synthesized click event still targets the actual photo
-  // underneath the cursor, instead of being redirected to the track itself.
-  function onGalleryPointerMove(e) {
-    if (!isDragging) return;
-    const deltaX = e.clientX - dragStartX;
+  function moveGalleryTo(clientX) {
+    const deltaX = clientX - dragStartX;
     if (Math.abs(deltaX) > DRAG_CLICK_THRESHOLD) gallerySuppressClick = true;
     const step = getGalleryStep();
     const liveCol = dragStartCol - deltaX / step;
     galleryTrack.style.transform = `translateX(-${liveCol * step}px)`;
+    return deltaX;
   }
 
-  function endGalleryDrag(e) {
-    if (!isDragging) return;
+  function startGalleryDrag(clientX) {
+    isDragging = true;
+    gallerySuppressClick = false;
+    dragStartX = clientX;
+    dragStartCol = galleryCol;
+    galleryTrack.style.transition = "none";
+    galleryTrack.classList.add("dragging");
+  }
+
+  function finishGalleryDrag(clientX) {
     isDragging = false;
     galleryTrack.classList.remove("dragging");
-    window.removeEventListener("pointermove", onGalleryPointerMove);
-    window.removeEventListener("pointerup", endGalleryDrag);
-    window.removeEventListener("pointercancel", endGalleryDrag);
-    const deltaX = e.clientX - dragStartX;
+    const deltaX = clientX - dragStartX;
     const step = getGalleryStep();
     galleryCol = dragStartCol + Math.round(-deltaX / step);
     setGalleryPosition(galleryCol, true);
   }
 
+  // Mouse (Pointer Events, move/up on window so a plain click still targets
+  // the actual photo underneath rather than getting redirected to the track).
+  function onGalleryPointerMove(e) {
+    if (!isDragging) return;
+    moveGalleryTo(e.clientX);
+  }
+  function endGalleryPointerDrag(e) {
+    if (!isDragging) return;
+    window.removeEventListener("pointermove", onGalleryPointerMove);
+    window.removeEventListener("pointerup", endGalleryPointerDrag);
+    window.removeEventListener("pointercancel", endGalleryPointerDrag);
+    finishGalleryDrag(e.clientX);
+  }
   galleryTrack.addEventListener("pointerdown", (e) => {
-    // Some WebKit/iOS versions report button as -1 (not 0) for touch pointers,
-    // so only gate on button for an actual mouse - touch/pen always proceed.
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    isDragging = true;
-    gallerySuppressClick = false;
-    dragStartX = e.clientX;
-    dragStartCol = galleryCol;
-    galleryTrack.style.transition = "none";
-    galleryTrack.classList.add("dragging");
+    if (e.pointerType !== "mouse") return;
+    if (e.button !== 0) return;
+    startGalleryDrag(e.clientX);
     window.addEventListener("pointermove", onGalleryPointerMove);
-    window.addEventListener("pointerup", endGalleryDrag);
-    window.addEventListener("pointercancel", endGalleryDrag);
+    window.addEventListener("pointerup", endGalleryPointerDrag);
+    window.addEventListener("pointercancel", endGalleryPointerDrag);
   });
+
+  // Touch (native Touch Events).
+  galleryTrack.addEventListener(
+    "touchstart",
+    (e) => startGalleryDrag(e.touches[0].clientX),
+    { passive: true }
+  );
+  galleryTrack.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!isDragging) return;
+      moveGalleryTo(e.touches[0].clientX);
+    },
+    { passive: true }
+  );
+  function endGalleryTouchDrag(e) {
+    if (!isDragging) return;
+    finishGalleryDrag(e.changedTouches[0].clientX);
+  }
+  galleryTrack.addEventListener("touchend", endGalleryTouchDrag);
+  galleryTrack.addEventListener("touchcancel", endGalleryTouchDrag);
 
   window.addEventListener("resize", () => setGalleryPosition(galleryCol, false));
   setGalleryPosition(galleryCol, false);
