@@ -111,6 +111,7 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   background:#fff;
 }
 .brand-text span{color:var(--red);}
+.vox{color:var(--red);}
 .nav-links{display:flex;align-items:center;gap:28px;}
 .nav-link{
   font-size:.95rem;letter-spacing:.05em;text-transform:uppercase;
