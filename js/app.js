@@ -144,6 +144,23 @@ function onScroll() {
 document.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
 
+// ---------- Back to top ----------
+const backToTop = document.getElementById("back-to-top");
+if (backToTop) {
+  document.addEventListener(
+    "scroll",
+    () => backToTop.classList.toggle("visible", window.scrollY > 500),
+    { passive: true }
+  );
+  backToTop.addEventListener("click", (e) => {
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Clear any deep-link hash (e.g. #shows) from the address bar instead of
+    // just changing it to #top.
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  });
+}
+
 // ---------- Scroll-spy nav highlighting ----------
 const navSectionIds = ["about", "gallery", "setlist", "shows", "videos", "book"];
 const navLinkBySection = {};
