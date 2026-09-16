@@ -265,7 +265,6 @@ const lightboxClose = document.getElementById("lightbox-close");
 const lightboxPrev = document.getElementById("lightbox-prev");
 const lightboxNext = document.getElementById("lightbox-next");
 const lightboxCta = document.getElementById("lightbox-cta");
-const lightboxCtaText = document.getElementById("lightbox-cta-text");
 
 let lightboxPhotos = [];
 let lightboxIndex = 0;
@@ -282,7 +281,6 @@ function showLightboxPhoto(index) {
   // the thumbnail.
   if (el.dataset.ctaHref) {
     lightboxCta.href = el.dataset.ctaHref;
-    lightboxCtaText.textContent = el.dataset.ctaLabel || "Learn More";
     lightboxCta.hidden = false;
   } else {
     lightboxCta.hidden = true;
