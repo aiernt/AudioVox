@@ -1,15 +1,3 @@
-// ---------- Temporary touch debug overlay (add ?debug=1 to the URL) ----------
-const touchDebugEl = document.getElementById("touch-debug");
-const touchDebugOn = new URLSearchParams(location.search).has("debug");
-if (touchDebugOn && touchDebugEl) touchDebugEl.hidden = false;
-function touchDebug(msg) {
-  if (!touchDebugOn || !touchDebugEl) return;
-  const p = document.createElement("p");
-  p.textContent = `${new Date().toISOString().slice(11, 23)}  ${msg}`;
-  touchDebugEl.appendChild(p);
-  touchDebugEl.scrollTop = touchDebugEl.scrollHeight;
-}
-
 // ---------- Bands we cover ----------
 const BANDS = [
   { artist: "Stone Temple Pilots", image: "stone-temple-pilots.jpg" },
@@ -132,6 +120,20 @@ if (coverBandsGrid) {
     li.appendChild(name);
     coverBandsGrid.appendChild(li);
   });
+
+  // On touch devices (no real hover), reveal each tile's full color as it
+  // scrolls into view instead of requiring a tap. Desktop keeps :hover.
+  if (!window.matchMedia("(hover: hover)").matches) {
+    const bandObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          entry.target.classList.toggle("in-view", entry.isIntersecting);
+        });
+      },
+      { rootMargin: "-15% 0px -15% 0px" }
+    );
+    coverBandsGrid.querySelectorAll(".cover-band-art").forEach((tile) => bandObserver.observe(tile));
+  }
 }
 
 // ---------- Header scroll state ----------

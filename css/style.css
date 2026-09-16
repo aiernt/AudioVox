@@ -378,10 +378,12 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .gallery-prev{left:0;}
 .gallery-next{right:0;}
 @media (max-width:600px){
+  .gallery-swiper{padding:20px 0 24px;}
   .gallery-swiper .swiper-slide{width:240px;}
   .gallery-nav{width:36px;height:36px;font-size:1rem;}
   .gallery-prev{left:2px;}
   .gallery-next{right:2px;}
+  #gallery{padding-bottom:16px;}
 }
 
 /* ---------- Setlist (bands we cover) ---------- */
@@ -398,7 +400,8 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   background:
     linear-gradient(150deg, hsl(var(--hue) 70% 34%), hsl(calc(var(--hue) + 35) 65% 14%));
 }
-.cover-band-art:hover{
+.cover-band-art:hover,
+.cover-band-art.in-view{
   filter:none;
   transform:scale(1.08);
   box-shadow:0 18px 40px rgba(0,0,0,.55);
@@ -606,6 +609,12 @@ body.modal-open{overflow:hidden;}
   .tip-card .btn{align-self:center;}
   .cover-bands-grid,.band-members,.gallery-carousel{margin-left:auto;margin-right:auto;}
 
+  /* Grid's auto-fill stretches a trailing incomplete row to fill the width;
+     flex + justify-content:center lets a leftover row (e.g. 2, 2, 1) center
+     itself instead. */
+  .cover-bands-grid{display:flex;flex-wrap:wrap;justify-content:center;}
+  .cover-band-art{flex:0 1 calc(50% - 8px);}
+
   /* The About photo's rotate+shift is meant to offset it from a text column
      that sits beside it on desktop; stacked on mobile there's no column to
      shift away from, and the sideways shift was pushing it (and the whole
@@ -620,14 +629,3 @@ body.modal-open{overflow:hidden;}
   .lightbox{padding:16px;}
   .lightbox-close{top:10px;right:12px;width:38px;height:38px;font-size:1.5rem;}
 }
-
-/* ---------- Temporary touch debug overlay (?debug=1) ---------- */
-#touch-debug{
-  position:fixed;left:0;right:0;bottom:0;z-index:99999;
-  max-height:40vh;overflow-y:auto;
-  background:rgba(0,0,0,.92);color:#0f0;
-  font-family:monospace;font-size:12px;line-height:1.4;
-  padding:8px 10px;
-}
-#touch-debug[hidden]{display:none;}
-#touch-debug p{margin:0;border-bottom:1px solid rgba(255,255,255,.1);padding:2px 0;}
