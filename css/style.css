@@ -572,30 +572,30 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .lightbox-prev{left:-20px;}
 .lightbox-next{right:-20px;}
 .lightbox-cta{
-  position:absolute;left:50%;top:-58px;transform:translateX(-50%);
-  display:inline-flex;align-items:center;gap:10px;z-index:2;
+  position:absolute;left:50%;top:-146px;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:2px;z-index:2;
   background:none;border:none;padding:0;
   white-space:nowrap;
 }
 .lightbox-cta[hidden]{display:none;}
 .lightbox-cta-text{
-  font-family:'Great Vibes',cursive;
-  font-size:2.4rem;line-height:1;color:#fff;
+  font-family:'Pacifico',cursive;
+  font-size:2.2rem;line-height:1.2;color:#fff;
   text-shadow:
     0 0 4px #fff, 0 0 10px #fff,
     0 0 22px var(--red-glow), 0 0 42px var(--red), 0 0 70px var(--red);
   animation:neon-sign-flicker 3s infinite;
 }
-.lightbox-cta-arrow{
-  width:44px;height:18px;flex:none;
-  fill:none;stroke:var(--red-glow);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;
-  filter:drop-shadow(0 0 4px var(--red-glow)) drop-shadow(0 0 12px var(--red));
-  animation:cta-arrow-dash 1.1s ease-in-out infinite;
+.lightbox-cta-arrow{width:40px;height:70px;flex:none;}
+.lightbox-cta-arrow .bulb{
+  fill:var(--red-glow);
+  filter:drop-shadow(0 0 3px var(--red-glow)) drop-shadow(0 0 9px var(--red));
+  animation:bulb-chase 1.4s linear infinite;
 }
-.lightbox-cta-arrow path{fill:var(--red-glow);stroke:none;}
-@keyframes cta-arrow-dash{
-  0%,100%{transform:translateX(0);opacity:.85;}
-  50%{transform:translateX(7px);opacity:1;}
+@keyframes bulb-chase{
+  0%,100%{opacity:.2;}
+  18%{opacity:1;}
+  45%{opacity:.2;}
 }
 @keyframes neon-sign-flicker{
   0%,19%,21%,25%,53%,57%,100%{opacity:1;}
@@ -660,9 +660,9 @@ body.modal-open{overflow:hidden;}
   .lightbox-prev{left:4px;}
   .lightbox-next{right:4px;}
   .lightbox-close{top:-14px;right:-14px;width:30px;height:30px;font-size:1.2rem;}
-  .lightbox-cta{top:-44px;gap:6px;}
-  .lightbox-cta-text{font-size:1.7rem;}
-  .lightbox-cta-arrow{width:32px;height:14px;}
+  .lightbox-cta{top:-108px;}
+  .lightbox-cta-text{font-size:1.6rem;}
+  .lightbox-cta-arrow{width:30px;height:52px;}
 }
 
 /* ---------- Responsive ---------- */
