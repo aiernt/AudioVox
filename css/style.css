@@ -572,48 +572,18 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .lightbox-prev{left:-20px;}
 .lightbox-next{right:-20px;}
 .lightbox-cta{
-  position:absolute;left:-24px;bottom:-16px;z-index:2;
-  width:110px;height:193px;
-  background:none;border:none;padding:0;
+  position:absolute;left:50%;bottom:28px;transform:translateX(-50%);
+  display:inline-flex;align-items:center;gap:8px;z-index:2;
+  padding:14px 28px;border-radius:4px;
+  background:var(--red);color:#fff;
+  font-family:var(--font-display);font-size:1.1rem;letter-spacing:.04em;text-transform:uppercase;
+  animation:cta-pulse 1.8s ease-in-out infinite;
 }
 .lightbox-cta[hidden]{display:none;}
-.lightbox-cta-sign{
-  position:absolute;inset:0;width:100%;height:100%;
-  filter:drop-shadow(0 6px 10px rgba(0,0,0,.6));
-}
-.cta-shaft,.cta-head{fill:var(--red);}
-.cta-shaft-border,.cta-head-border{
-  fill:none;stroke:var(--cream);stroke-width:9;stroke-linejoin:round;
-}
-.cta-hook{
-  fill:none;stroke:var(--red);stroke-width:22;stroke-linecap:round;
-}
-.cta-hook-border{
-  fill:none;stroke:var(--cream);stroke-width:30;stroke-linecap:round;
-}
-.cta-shaft-letter{
-  font-family:var(--font-display);font-size:26px;
-  fill:var(--cream);text-anchor:middle;
-}
-.cta-cursive{
-  font-family:'Kaushan Script',cursive;font-size:22px;
-  fill:#ffd84d;text-anchor:middle;
-  filter:drop-shadow(0 0 3px #ffd84d) drop-shadow(0 0 8px #ff9d00);
-  animation:neon-sign-flicker 3s infinite;
-}
-.bulb{
-  fill:#ffd84d;
-  filter:drop-shadow(0 0 3px #ffd84d) drop-shadow(0 0 8px #ff9d00);
-  animation:bulb-chase 1.6s linear infinite;
-}
-@keyframes bulb-chase{
-  0%,100%{opacity:.2;}
-  18%{opacity:1;}
-  45%{opacity:.2;}
-}
-@keyframes neon-sign-flicker{
-  0%,19%,21%,25%,53%,57%,100%{opacity:1;}
-  20%,24%,55%{opacity:.7;}
+.lightbox-cta:hover{background:var(--red-2);}
+@keyframes cta-pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(224,17,40,.55);}
+  50%{box-shadow:0 0 0 14px rgba(224,17,40,0);}
 }
 body.lightbox-open{overflow:hidden;}
 
@@ -674,9 +644,7 @@ body.modal-open{overflow:hidden;}
   .lightbox-prev{left:4px;}
   .lightbox-next{right:4px;}
   .lightbox-close{top:-14px;right:-14px;width:30px;height:30px;font-size:1.2rem;}
-  .lightbox-cta{width:82px;height:144px;left:-16px;bottom:-10px;}
-  .cta-shaft-letter{font-size:20px;}
-  .cta-cursive{font-size:17px;}
+  .lightbox-cta{padding:11px 18px;font-size:.9rem;bottom:14px;}
 }
 
 /* ---------- Responsive ---------- */

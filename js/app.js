@@ -281,6 +281,7 @@ function showLightboxPhoto(index) {
   // the thumbnail.
   if (el.dataset.ctaHref) {
     lightboxCta.href = el.dataset.ctaHref;
+    lightboxCta.textContent = el.dataset.ctaLabel || "Learn More";
     lightboxCta.hidden = false;
   } else {
     lightboxCta.hidden = true;
