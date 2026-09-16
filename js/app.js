@@ -123,7 +123,7 @@ if (coverBandsGrid) {
 
   // On touch devices (no real hover), reveal each tile's full color as it
   // scrolls into view instead of requiring a tap. Desktop keeps :hover.
-  if (!window.matchMedia("(hover: hover)").matches) {
+  if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
     const bandObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
