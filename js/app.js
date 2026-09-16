@@ -264,6 +264,7 @@ const lightboxImg = document.getElementById("lightbox-img");
 const lightboxClose = document.getElementById("lightbox-close");
 const lightboxPrev = document.getElementById("lightbox-prev");
 const lightboxNext = document.getElementById("lightbox-next");
+const lightboxCta = document.getElementById("lightbox-cta");
 
 let lightboxPhotos = [];
 let lightboxIndex = 0;
@@ -274,6 +275,17 @@ function showLightboxPhoto(index) {
   const el = lightboxPhotos[lightboxIndex];
   lightboxImg.src = el.dataset.src || el.currentSrc || el.src || "";
   lightboxImg.alt = el.dataset.alt || el.alt || "";
+
+  // Some photos (e.g. the show flyer) carry a call-to-action link to show
+  // inside the lightbox rather than navigating away the instant you click
+  // the thumbnail.
+  if (el.dataset.ctaHref) {
+    lightboxCta.href = el.dataset.ctaHref;
+    lightboxCta.textContent = el.dataset.ctaLabel || "Learn More";
+    lightboxCta.hidden = false;
+  } else {
+    lightboxCta.hidden = true;
+  }
 }
 
 function openLightbox(img) {
@@ -305,6 +317,7 @@ document.addEventListener("click", (e) => {
   if (trigger && !trigger.closest(".swiper-slide-duplicate")) openLightbox(trigger);
 });
 lightboxClose.addEventListener("click", closeLightbox);
+lightboxCta.addEventListener("click", closeLightbox);
 lightboxPrev.addEventListener("click", () => showLightboxPhoto(lightboxIndex - 1));
 lightboxNext.addEventListener("click", () => showLightboxPhoto(lightboxIndex + 1));
 lightbox.addEventListener("click", (e) => {

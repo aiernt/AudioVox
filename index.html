@@ -47,10 +47,18 @@
         <a href="#shows" class="btn btn-outline">Upcoming Shows</a>
       </div>
     </div>
-    <a href="#shows" class="next-show" id="next-show" aria-label="See upcoming show details">
+    <div class="next-show" id="next-show">
       <span class="next-show-tape"></span>
-      <img src="images/flyer.jpg" alt="Upcoming show flyer" class="next-show-img" id="next-show-img">
-    </a>
+      <img
+        src="images/flyer.jpg"
+        alt="Upcoming show flyer"
+        class="next-show-img lightbox-trigger"
+        id="next-show-img"
+        data-lightbox-group="flyer"
+        data-cta-href="#shows"
+        data-cta-label="See Upcoming Shows"
+      >
+    </div>
     <a href="#about" class="scroll-cue" aria-label="Scroll down"><span></span></a>
   </section>
 
@@ -235,6 +243,7 @@
     <button id="lightbox-prev" class="lightbox-nav lightbox-prev" aria-label="Previous photo">&#10094;</button>
     <img id="lightbox-img" src="" alt="">
     <button id="lightbox-next" class="lightbox-nav lightbox-next" aria-label="Next photo">&#10095;</button>
+    <a id="lightbox-cta" class="lightbox-cta" href="#" hidden></a>
   </div>
 </div>
 
