@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=7">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+<link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 
@@ -117,8 +118,8 @@
     </div>
     <div class="gallery-carousel section-inner">
       <button id="gallery-prev" class="gallery-nav gallery-prev" aria-label="Slide left">&#10094;</button>
-      <div class="gallery-viewport">
-        <div class="gallery-track" id="gallery-track"></div>
+      <div class="swiper gallery-swiper">
+        <div class="swiper-wrapper" id="gallery-wrapper"></div>
       </div>
       <button id="gallery-next" class="gallery-nav gallery-next" aria-label="Slide right">&#10095;</button>
     </div>
@@ -301,6 +302,7 @@
 
 <div id="touch-debug" hidden></div>
 
-<script src="js/app.js?v=13"></script>
+<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>

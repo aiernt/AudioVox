@@ -196,184 +196,47 @@ function bindPhotoFallback(img) {
 }
 document.querySelectorAll(".photo-fallback").forEach(bindPhotoFallback);
 
-// The track holds the real set 3x back-to-back (prev copy, real copy, next copy)
-// so sliding past either end always reveals more photos instead of hitting a wall.
-// Only the middle (real) copy is clickable/lightbox-enabled to avoid duplicate stops.
-const galleryTrack = document.getElementById("gallery-track");
-const galleryPrevBtn = document.getElementById("gallery-prev");
-const galleryNextBtn = document.getElementById("gallery-next");
-const GALLERY_COLS = Math.ceil(GALLERY_IMAGES.length / 2);
-let gallerySuppressClick = false;
+// ---------- Gallery (Swiper.js coverflow) ----------
+// Swiper handles touch/drag/loop itself - it's a proven, widely-used library
+// built specifically to deal with the iOS touch-event quirks that made a
+// hand-rolled drag carousel unreliable.
+const galleryWrapper = document.getElementById("gallery-wrapper");
 
-if (galleryTrack) {
-  // These are plain divs with a CSS background-image, not <img> elements.
-  // iOS Safari treats a real <img> as a natively "pick-up-able" object (for
-  // cross-app drag & drop / save-image), and the first touch on one gets
-  // consumed by that system deciding whether it's a native drag before our
-  // own touch handlers get a clean shot at it - requiring an extra "priming"
-  // tap before dragging would work. Divs aren't subject to that at all.
-  for (let copy = 0; copy < 3; copy++) {
-    GALLERY_IMAGES.forEach(({ file, alt }) => {
-      const src = `images/gallery/${file}`;
-      const tile = document.createElement("div");
-      tile.className = "photo-fallback gallery-photo photo-frame";
-      // Lightbox left OFF on purpose until drag is confirmed working - do
-      // not re-enable without checking first.
-      // if (copy === 1) tile.classList.add("lightbox-trigger");
-      tile.setAttribute("role", "img");
-      tile.setAttribute("aria-label", alt);
-      tile.dataset.lightboxGroup = "gallery";
-      tile.dataset.fallbackLabel = src;
-      tile.dataset.src = src;
-      tile.dataset.alt = alt;
-      galleryTrack.appendChild(tile);
-
-      const preload = new Image();
-      preload.onload = () => {
-        tile.style.backgroundImage = `url("${src}")`;
-      };
-      preload.onerror = () => {
-        const span = document.createElement("span");
-        span.textContent = `Drop a photo here: ${src}`;
-        span.className = tile.className + " is-missing";
-        tile.replaceWith(span);
-      };
-      preload.src = src;
-    });
-  }
-
-  let galleryCol = GALLERY_COLS;
-
-  function getGalleryStep() {
-    const colBox = galleryTrack.children[0].getBoundingClientRect().width;
-    const gap = parseFloat(getComputedStyle(galleryTrack).columnGap) || 0;
-    return colBox + gap;
-  }
-
-  function setGalleryPosition(col, animate) {
-    const step = getGalleryStep();
-    galleryTrack.style.transition = animate ? "transform .45s ease" : "none";
-    galleryTrack.style.transform = `translateX(-${col * step}px)`;
-  }
-
-  function slideGallery(deltaCols) {
-    galleryCol += deltaCols;
-    setGalleryPosition(galleryCol, true);
-  }
-
-  galleryTrack.addEventListener("transitionend", () => {
-    if (galleryCol >= GALLERY_COLS * 2) {
-      galleryCol -= GALLERY_COLS;
-      setGalleryPosition(galleryCol, false);
-    } else if (galleryCol < GALLERY_COLS) {
-      galleryCol += GALLERY_COLS;
-      setGalleryPosition(galleryCol, false);
-    }
+if (galleryWrapper) {
+  GALLERY_IMAGES.forEach(({ file, alt }) => {
+    const src = `images/gallery/${file}`;
+    const slide = document.createElement("div");
+    slide.className = "swiper-slide";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = alt;
+    img.loading = "lazy";
+    img.className = "photo-fallback gallery-photo lightbox-trigger";
+    img.dataset.lightboxGroup = "gallery";
+    img.dataset.fallbackLabel = src;
+    bindPhotoFallback(img);
+    slide.appendChild(img);
+    galleryWrapper.appendChild(slide);
   });
 
-  galleryPrevBtn.addEventListener("click", () => slideGallery(-1));
-  galleryNextBtn.addEventListener("click", () => slideGallery(1));
-
-  // ---------- Drag / swipe ----------
-  // Mouse dragging uses Pointer Events. Touch uses plain Touch Events instead
-  // of Pointer Events - iOS Safari's pointer-event support for custom drag
-  // gestures has proven unreliable in practice, while touchstart/move/end are
-  // the long-standing, dependable way to do this on iOS.
-  let isDragging = false;
-  let dragStartX = 0;
-  let dragStartCol = 0;
-  const DRAG_CLICK_THRESHOLD = 6;
-
-  function moveGalleryTo(clientX) {
-    const deltaX = clientX - dragStartX;
-    if (Math.abs(deltaX) > DRAG_CLICK_THRESHOLD) gallerySuppressClick = true;
-    const step = getGalleryStep();
-    const liveCol = dragStartCol - deltaX / step;
-    galleryTrack.style.transform = `translateX(-${liveCol * step}px)`;
-    return deltaX;
-  }
-
-  function startGalleryDrag(clientX) {
-    isDragging = true;
-    gallerySuppressClick = false;
-    dragStartX = clientX;
-    dragStartCol = galleryCol;
-    galleryTrack.style.transition = "none";
-    galleryTrack.classList.add("dragging");
-  }
-
-  function finishGalleryDrag(clientX) {
-    isDragging = false;
-    galleryTrack.classList.remove("dragging");
-    const deltaX = clientX - dragStartX;
-    const step = getGalleryStep();
-    galleryCol = dragStartCol + Math.round(-deltaX / step);
-    setGalleryPosition(galleryCol, true);
-  }
-
-  // Mouse (Pointer Events, move/up on window so a plain click still targets
-  // the actual photo underneath rather than getting redirected to the track).
-  function onGalleryPointerMove(e) {
-    if (!isDragging) return;
-    moveGalleryTo(e.clientX);
-  }
-  function endGalleryPointerDrag(e) {
-    if (!isDragging) return;
-    window.removeEventListener("pointermove", onGalleryPointerMove);
-    window.removeEventListener("pointerup", endGalleryPointerDrag);
-    window.removeEventListener("pointercancel", endGalleryPointerDrag);
-    finishGalleryDrag(e.clientX);
-  }
-  galleryTrack.addEventListener("pointerdown", (e) => {
-    touchDebug(`pointerdown type=${e.pointerType} button=${e.button}`);
-    if (e.pointerType !== "mouse") return;
-    if (e.button !== 0) return;
-    startGalleryDrag(e.clientX);
-    window.addEventListener("pointermove", onGalleryPointerMove);
-    window.addEventListener("pointerup", endGalleryPointerDrag);
-    window.addEventListener("pointercancel", endGalleryPointerDrag);
+  new Swiper(".gallery-swiper", {
+    effect: "coverflow",
+    grabCursor: true,
+    centeredSlides: true,
+    loop: true,
+    slidesPerView: "auto",
+    coverflowEffect: {
+      rotate: 30,
+      stretch: 0,
+      depth: 150,
+      modifier: 1,
+      slideShadows: false,
+    },
+    navigation: {
+      nextEl: "#gallery-next",
+      prevEl: "#gallery-prev",
+    },
   });
-
-  // Touch (native Touch Events).
-  galleryTrack.addEventListener(
-    "touchstart",
-    (e) => {
-      touchDebug(`touchstart target=${e.target.tagName} touches=${e.touches.length}`);
-      startGalleryDrag(e.touches[0].clientX);
-    },
-    { passive: true }
-  );
-  galleryTrack.addEventListener(
-    "touchmove",
-    (e) => {
-      touchDebug(`touchmove isDragging=${isDragging} x=${Math.round(e.touches[0].clientX)}`);
-      if (!isDragging) return;
-      // Safari, unlike Chrome, treats a passive touchmove listener as "not
-      // handling this gesture" and can hand it off to its own default
-      // behavior instead of continuing to deliver events to us. Marking this
-      // non-passive and calling preventDefault tells it we're taking over.
-      e.preventDefault();
-      moveGalleryTo(e.touches[0].clientX);
-    },
-    { passive: false }
-  );
-  function endGalleryTouchDrag(e) {
-    touchDebug(`${e.type} isDragging=${isDragging} suppress=${gallerySuppressClick}`);
-    if (!isDragging) return;
-    // If real movement happened, stop the browser from synthesizing a click
-    // at all - relying only on the gallerySuppressClick flag (checked later,
-    // in the separate document click listener) leaves a timing gap on iOS
-    // Safari where a click can slip through and pop the lightbox open
-    // mid-drag, which looks exactly like something appearing on top of the
-    // photos.
-    if (gallerySuppressClick && e.cancelable) e.preventDefault();
-    finishGalleryDrag(e.changedTouches[0].clientX);
-  }
-  galleryTrack.addEventListener("touchend", endGalleryTouchDrag);
-  galleryTrack.addEventListener("touchcancel", endGalleryTouchDrag);
-
-  window.addEventListener("resize", () => setGalleryPosition(galleryCol, false));
-  setGalleryPosition(galleryCol, false);
 }
 
 // ---------- Lightbox ----------
@@ -390,8 +253,6 @@ function showLightboxPhoto(index) {
   if (!lightboxPhotos.length) return;
   lightboxIndex = (index + lightboxPhotos.length) % lightboxPhotos.length;
   const el = lightboxPhotos[lightboxIndex];
-  // Gallery tiles are plain divs with a background-image (see the gallery
-  // section below for why), everything else is a real <img>.
   lightboxImg.src = el.dataset.src || el.currentSrc || el.src || "";
   lightboxImg.alt = el.dataset.alt || el.alt || "";
 }
@@ -400,7 +261,9 @@ function openLightbox(img) {
   const group = img.dataset.lightboxGroup || "";
   lightboxPhotos = Array.from(
     document.querySelectorAll(".lightbox-trigger:not(.is-missing)")
-  ).filter((el) => (el.dataset.lightboxGroup || "") === group);
+  ).filter(
+    (el) => (el.dataset.lightboxGroup || "") === group && !el.closest(".swiper-slide-duplicate")
+  );
   const startIndex = lightboxPhotos.indexOf(img);
   const hasMultiple = lightboxPhotos.length > 1;
   lightboxPrev.hidden = !hasMultiple;
@@ -416,12 +279,11 @@ function closeLightbox() {
 }
 
 document.addEventListener("click", (e) => {
-  if (gallerySuppressClick) {
-    gallerySuppressClick = false;
-    return;
-  }
   const trigger = e.target.closest(".lightbox-trigger:not(.is-missing)");
-  if (trigger) openLightbox(trigger);
+  // Swiper clones slides internally (for the loop effect) and marks the
+  // clones with this class - skip them so the lightbox doesn't treat a
+  // photo as appearing multiple times in the sequence.
+  if (trigger && !trigger.closest(".swiper-slide-duplicate")) openLightbox(trigger);
 });
 lightboxClose.addEventListener("click", closeLightbox);
 lightboxPrev.addEventListener("click", () => showLightboxPhoto(lightboxIndex - 1));
