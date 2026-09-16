@@ -130,7 +130,7 @@ if (coverBandsGrid) {
           entry.target.classList.toggle("in-view", entry.isIntersecting);
         });
       },
-      { rootMargin: "-15% 0px -15% 0px" }
+      { rootMargin: "-35% 0px -15% 0px" }
     );
     coverBandsGrid.querySelectorAll(".cover-band-art").forEach((tile) => bandObserver.observe(tile));
   }
