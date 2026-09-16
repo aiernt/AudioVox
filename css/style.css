@@ -572,8 +572,8 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .lightbox-prev{left:-20px;}
 .lightbox-next{right:-20px;}
 .lightbox-cta{
-  position:absolute;left:50%;top:-146px;transform:translateX(-50%);
-  display:flex;flex-direction:column;align-items:center;gap:2px;z-index:2;
+  position:absolute;left:2px;bottom:2px;z-index:2;
+  display:flex;flex-direction:row;align-items:flex-end;gap:4px;
   background:none;border:none;padding:0;
   white-space:nowrap;
 }
@@ -676,7 +676,6 @@ body.modal-open{overflow:hidden;}
   .lightbox-prev{left:4px;}
   .lightbox-next{right:4px;}
   .lightbox-close{top:-14px;right:-14px;width:30px;height:30px;font-size:1.2rem;}
-  .lightbox-cta{top:-100px;}
   .lightbox-cta-text{font-size:1.6rem;}
   .lightbox-cta-arrow{width:42px;height:47px;}
 }
