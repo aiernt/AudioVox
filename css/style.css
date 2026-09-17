@@ -572,7 +572,7 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .lightbox-prev{left:-20px;}
 .lightbox-next{right:-20px;}
 .lightbox-cta{
-  position:absolute;left:50%;bottom:0px;transform:translateX(-50%);
+  position:absolute;left:50%;bottom:-16px;transform:translateX(-50%);
   display:inline-flex;align-items:center;gap:8px;z-index:2;
   padding:14px 28px;border-radius:4px;
   background:var(--red);color:#fff;
@@ -644,7 +644,7 @@ body.modal-open{overflow:hidden;}
   .lightbox-prev{left:4px;}
   .lightbox-next{right:4px;}
   .lightbox-close{top:-14px;right:-14px;width:30px;height:30px;font-size:1.2rem;}
-  .lightbox-cta{padding:11px 18px;font-size:.9rem;bottom:0px;}
+  .lightbox-cta{padding:11px 18px;font-size:.9rem;bottom:-8px;}
 }
 
 /* ---------- Responsive ---------- */
