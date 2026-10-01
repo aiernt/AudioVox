@@ -374,6 +374,8 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 
 /* ---------- Meet the Band ---------- */
 .band-grid{margin-top:64px;}
+.about-lineup{padding-top:0;}
+.about-lineup .band-grid{margin-top:0;}
 .band-title{font-size:clamp(1.8rem,3.6vw,2.4rem);color:var(--cream);margin:0 0 26px;}
 .band-members{
   display:grid;grid-template-columns:repeat(5,1fr);gap:18px;
