@@ -74,7 +74,11 @@ const GALLERY_IMAGES = [
   { file: "gallery-26.jpg", alt: "" },
   { file: "gallery-27.jpg", alt: "" },
   { file: "gallery-28.jpg", alt: "" },
-  { file: "gallery-29.jpg", alt: "" }
+  { file: "gallery-29.jpg", alt: "" },
+  { file: "gallery-30.jpg", alt: "" },
+  { file: "gallery-31.jpg", alt: "" },
+  { file: "gallery-32.jpg", alt: "" },
+  { file: "gallery-33.jpg", alt: "" }
 ];
 
 // Each BANDS entry can carry an optional `image` (e.g. { artist: "...", image: "file.jpg" }).
