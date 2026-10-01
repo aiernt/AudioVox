@@ -54,7 +54,8 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 
 .section-inner{max-width:var(--maxw);margin:0 auto;padding:0 24px;}
 .section{position:relative;padding:36px 0;}
-/* Padding either side of the lower hazard strip: same on desktop and mobile */
+/* Padding either side of the hazard strips: same on desktop and mobile */
+#about{padding-top:36px;}
 #videos{padding-bottom:36px;}
 #book{padding-top:36px;}
 .eyebrow{
