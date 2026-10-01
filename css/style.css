@@ -426,7 +426,7 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .gallery-prev{left:0;}
 .gallery-next{right:0;}
 @media (max-width:600px){
-  .gallery-swiper{padding:20px 0 24px;}
+  .gallery-swiper{padding:24px 0 24px;}
   .gallery-swiper .swiper-slide{width:240px;}
   .gallery-nav{width:36px;height:36px;font-size:1rem;}
   .gallery-prev{left:2px;}
@@ -727,7 +727,7 @@ body.modal-open{overflow:hidden;}
 @media (max-width:820px){
   .about-grid,.book-grid{grid-template-columns:1fr;}
   .about-photo{order:-1;max-width:340px;margin:0 auto;}
-  .section{padding:36px 0;}
+  .section{padding:24px 0;}
 
   /* Every section's text/content centered on mobile, not just Book/Tip. */
   .section-inner,.about-text,.book-text,.tip-card,.video-list,.book-actions{
