@@ -340,7 +340,7 @@ const MEMBER_BIOS = {
   Jimmy: "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
   Brian: "Brian is originally from Northern California and began playing drums in middle school. He moved to Charlotte in 2006 with the goal of bringing 90's rock to the people and has been playing gigs around the area ever since. Brian is a versatile musician who can play drums both loudly and very loudly. But don't ask him to sing.",
   Curt: "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet.",
-  Rob: "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.",
+  Rob: "Rob grew up in Northern New York, so close to Canada he could practically see it from his porch. In 1997 he moved to the Charlotte area in search of warmer weather and louder amps. He was learning guitar chords at five, then spent his teen years behind a drum kit before switching back to guitar. He also sings, which Brian is very grateful for. Along the way he's played with Barefoot Pilgrim and Exit 85, and now he's here with AudioVox, still chasing the sound of a decade he never really left. He plays the blues like he has nothing to prove and rock like he has something to prove to the people in the back row.",
 };
 
 const memberModal = document.getElementById("member-modal");
