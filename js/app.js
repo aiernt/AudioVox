@@ -338,6 +338,11 @@ const nextShowImg = document.getElementById("next-show-img");
 if (nextShow && nextShowImg) {
   nextShowImg.addEventListener("error", () => nextShow.remove());
 }
+const nextShow2 = document.getElementById("next-show-2");
+const nextShowImg2 = document.getElementById("next-show-img-2");
+if (nextShow2 && nextShowImg2) {
+  nextShowImg2.addEventListener("error", () => nextShow2.remove());
+}
 
 // ---------- Upcoming shows (Google Calendar API) ----------
 // Read-only fetch of the band's public Google Calendar. The key is visible in
