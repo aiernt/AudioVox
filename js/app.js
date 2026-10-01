@@ -339,6 +339,93 @@ if (nextShow && nextShowImg) {
   nextShowImg.addEventListener("error", () => nextShow.remove());
 }
 
+// ---------- Upcoming shows (Google Calendar API) ----------
+// Read-only fetch of the band's public Google Calendar. The key is visible in
+// the page source by design; it's restricted in Google Cloud to the Calendar
+// API and this site's domains only.
+const CALENDAR_ID = "43e5d4c9e6b91e4037fa6ed11dd346ec2a66055111ee38d2aab50e6a2820ae67@group.calendar.google.com";
+const CALENDAR_API_KEY = "AIzaSyBFFSj9vYTkiSNF7S-zyIWN41cCzKzaicw";
+const CALENDAR_MAX_SHOWS = 8;
+const SHOW_TZ = "America/New_York";
+
+function renderShows(events) {
+  const list = document.getElementById("show-list");
+  list.replaceChildren();
+  if (!events.length) {
+    const li = document.createElement("li");
+    li.className = "show-empty";
+    li.textContent = "No shows booked right now — check back soon.";
+    list.appendChild(li);
+    return;
+  }
+  events.forEach((ev) => {
+    const allDay = !ev.start.dateTime;
+    // All-day events come back as a plain date; parse at noon so the timezone can't shift the day.
+    const start = new Date(allDay ? `${ev.start.date}T12:00:00` : ev.start.dateTime);
+    const tz = allDay ? undefined : SHOW_TZ;
+    const month = start.toLocaleString("en-US", { month: "short", timeZone: tz });
+    const day = start.toLocaleString("en-US", { day: "numeric", timeZone: tz });
+    const weekday = start.toLocaleString("en-US", { weekday: "long", timeZone: tz });
+    const time = allDay
+      ? ""
+      : start.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
+
+    const li = document.createElement("li");
+    li.className = "show-item";
+
+    const date = document.createElement("div");
+    date.className = "show-date";
+    const m = document.createElement("span");
+    m.className = "show-month";
+    m.textContent = month;
+    const d = document.createElement("span");
+    d.className = "show-day";
+    d.textContent = day;
+    date.append(m, d);
+
+    const info = document.createElement("div");
+    info.className = "show-info";
+    const title = document.createElement("span");
+    title.className = "show-title";
+    title.textContent = ev.summary || "AudioVox Live";
+    const meta = document.createElement("span");
+    meta.className = "show-meta";
+    meta.textContent = [weekday, time, ev.location].filter(Boolean).join(" · ");
+    info.append(title, meta);
+
+    li.append(date, info);
+    list.appendChild(li);
+  });
+}
+
+async function loadShows() {
+  const list = document.getElementById("show-list");
+  if (!list) return;
+  const params = new URLSearchParams({
+    key: CALENDAR_API_KEY,
+    timeMin: new Date().toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: String(CALENDAR_MAX_SHOWS),
+  });
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?${params}`
+    );
+    if (!res.ok) throw new Error(`Calendar API ${res.status}`);
+    const data = await res.json();
+    renderShows(data.items || []);
+  } catch (err) {
+    console.error("Could not load shows:", err);
+    list.replaceChildren();
+    const li = document.createElement("li");
+    li.className = "show-empty";
+    li.textContent = "Couldn’t load the schedule right now — use the full calendar link below.";
+    list.appendChild(li);
+  }
+}
+loadShows();
+
 // ---------- Booking form modal ----------
 // NOTE: submission is currently stubbed - it validates the form and shows the
 // success screen, but does not actually send anything anywhere yet. The
