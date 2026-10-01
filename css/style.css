@@ -674,10 +674,10 @@ body.modal-open{overflow:hidden;}
 
 /* ---------- Member bio popup ---------- */
 .member-photo{cursor:pointer;}
-.member-card{width:min(92vw,760px);}
-.member-bio{display:flex;align-items:flex-start;gap:30px;}
+.member-card{width:min(92vw,920px);}
+.member-bio{display:flex;align-items:flex-start;gap:34px;}
 .member-bio-photo{
-  flex:none;width:260px;max-width:40%;height:auto;
+  flex:none;width:360px;max-width:45%;height:auto;
   border:6px solid #f4f1e8;box-shadow:0 14px 30px rgba(0,0,0,.6);
 }
 .member-bio-text{min-width:0;}
@@ -686,7 +686,7 @@ body.modal-open{overflow:hidden;}
 .member-bio-copy[hidden]{display:none;}
 @media (max-width:620px){
   .member-bio{flex-direction:column;align-items:center;text-align:center;gap:20px;}
-  .member-bio-photo{width:200px;max-width:70%;}
+  .member-bio-photo{width:260px;max-width:80%;}
 }
 
 #booking-form{display:flex;flex-direction:column;gap:16px;margin-top:22px;}
