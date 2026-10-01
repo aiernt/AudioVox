@@ -395,7 +395,22 @@ function renderShows(list, events, { past = false } = {}) {
     title.textContent = ev.summary || "AudioVox Live";
     const meta = document.createElement("span");
     meta.className = "show-meta";
-    meta.textContent = [weekday, time, ev.location].filter(Boolean).join(" · ");
+    meta.textContent = [weekday, time].filter(Boolean).join(" · ");
+    if (ev.location) {
+      if (meta.textContent) meta.append(" · ");
+      if (past) {
+        meta.append(ev.location);
+      } else {
+        // Upcoming shows link the address out to Google Maps.
+        const map = document.createElement("a");
+        map.className = "show-map";
+        map.href = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}`;
+        map.target = "_blank";
+        map.rel = "noopener";
+        map.textContent = ev.location;
+        meta.append(map);
+      }
+    }
     info.append(title, meta);
 
     li.append(date, info);

@@ -501,6 +501,8 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .show-info{min-width:0;}
 .show-title{display:block;font-family:var(--font-display);font-size:1.5rem;letter-spacing:.03em;color:var(--cream);}
 .show-meta{display:block;color:var(--grey);font-size:.95rem;}
+.show-map{color:var(--grey);text-decoration:underline;text-decoration-color:var(--grey-dim);text-underline-offset:3px;transition:color .2s ease,text-decoration-color .2s ease;}
+.show-map:hover{color:var(--red-glow);text-decoration-color:var(--red-glow);}
 .show-empty{color:var(--grey);padding:18px 0;}
 .past-shows{margin-top:44px;}
 .past-shows[hidden]{display:none;}
