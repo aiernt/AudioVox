@@ -458,6 +458,9 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 }
 
 /* ---------- Shows ---------- */
+/* Tighten the gap between the bands grid and the shows list. */
+.setlist{padding-bottom:40px;}
+.shows{padding-top:40px;}
 .show-list{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:12px;}
 .show-item{
   display:flex;align-items:center;gap:22px;
@@ -666,6 +669,8 @@ body.modal-open{overflow:hidden;}
   .about-grid,.book-grid{grid-template-columns:1fr;}
   .about-photo{order:-1;max-width:340px;margin:0 auto;}
   .section{padding:72px 0;}
+  .setlist{padding-bottom:32px;}
+  .shows{padding-top:32px;}
 
   /* Every section's text/content centered on mobile, not just Book/Tip. */
   .section-inner,.about-text,.book-text,.tip-card,.video-list,.book-actions{
