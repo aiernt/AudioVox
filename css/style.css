@@ -240,6 +240,19 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   transition:transform .25s ease;
 }
 .next-show:hover{transform:rotate(-10deg) scale(1.04);}
+/* Red ink "ROCKED!" stamp slapped across the flyer. Sized in container units so it scales with the flyer. */
+.next-show{container-type:inline-size;}
+.next-show-stamp{
+  position:absolute;left:50%;top:52%;z-index:3;
+  transform:translate(-50%,-50%) rotate(22deg);
+  padding:.05em .22em .02em;
+  border:.09em solid #d10f27;border-radius:.08em;
+  color:#d10f27;font-family:var(--font-display);
+  -webkit-text-stroke:.02em #d10f27;
+  font-size:22cqw;line-height:1;letter-spacing:.06em;white-space:nowrap;
+  filter:url(#stamp-rough) drop-shadow(0 0 .04em rgba(255,244,228,.95));
+  pointer-events:none;user-select:none;
+}
 .next-show-right{transform:rotate(15deg);}
 .next-show-right:hover{transform:rotate(10deg) scale(1.04);}
 /* Mobile/tablet: flyers sit side by side under the buttons. */

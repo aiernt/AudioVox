@@ -32,6 +32,17 @@
   </nav>
 </header>
 
+<!-- Roughens the edges of the ROCKED! stamp so it looks like worn ink. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="stamp-rough" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" result="rough"/>
+    <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="3" result="blotch"/>
+    <feColorMatrix in="blotch" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.5 1.65" result="mask"/>
+    <feComposite in="rough" in2="mask" operator="in"/>
+  </filter>
+</svg>
+
 <main>
 
   <section id="top" class="hero">
@@ -59,6 +70,7 @@
           data-cta-href="#shows"
           data-cta-label="See Upcoming Shows"
         >
+        <span class="next-show-stamp" aria-hidden="true">ROCKED!</span>
       </div>
       <div class="next-show next-show-right" id="next-show-2">
         <span class="next-show-tape"></span>
