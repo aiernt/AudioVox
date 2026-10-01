@@ -116,27 +116,27 @@
       <h3 class="band-title">Meet The Band</h3>
       <ul class="band-members">
         <li class="band-member">
-          <img src="images/member-aaron.jpg" alt="Aaron" class="photo-fallback lightbox-trigger" data-fallback-label="images/member-aaron.jpg" data-lightbox-group="band">
+          <img src="images/member-aaron.jpg" alt="Aaron" class="photo-fallback member-photo" data-fallback-label="images/member-aaron.jpg">
           <span class="member-name">Aaron</span>
           <span class="member-role">Vocals</span>
         </li>
         <li class="band-member">
-          <img src="images/member-jimmy.jpg" alt="Jimmy" class="photo-fallback lightbox-trigger" data-fallback-label="images/member-jimmy.jpg" data-lightbox-group="band">
+          <img src="images/member-jimmy.jpg" alt="Jimmy" class="photo-fallback member-photo" data-fallback-label="images/member-jimmy.jpg">
           <span class="member-name">Jimmy</span>
           <span class="member-role">Lead Guitar</span>
         </li>
         <li class="band-member">
-          <img src="images/member-brian.jpg" alt="Brian" class="photo-fallback lightbox-trigger" data-fallback-label="images/member-brian.jpg" data-lightbox-group="band">
+          <img src="images/member-brian.jpg" alt="Brian" class="photo-fallback member-photo" data-fallback-label="images/member-brian.jpg">
           <span class="member-name">Brian</span>
           <span class="member-role">Drums</span>
         </li>
         <li class="band-member">
-          <img src="images/member-curt.jpg" alt="Curt" class="photo-fallback lightbox-trigger" data-fallback-label="images/member-curt.jpg" data-lightbox-group="band">
+          <img src="images/member-curt.jpg" alt="Curt" class="photo-fallback member-photo" data-fallback-label="images/member-curt.jpg">
           <span class="member-name">Curt</span>
           <span class="member-role">Bass</span>
         </li>
         <li class="band-member">
-          <img src="images/member-rob.jpg" alt="Rob" class="photo-fallback lightbox-trigger" data-fallback-label="images/member-rob.jpg" data-lightbox-group="band">
+          <img src="images/member-rob.jpg" alt="Rob" class="photo-fallback member-photo" data-fallback-label="images/member-rob.jpg">
           <span class="member-name">Rob</span>
           <span class="member-role">Guitar/Vocals</span>
         </li>
@@ -281,6 +281,22 @@
     <img id="lightbox-img" src="" alt="">
     <button id="lightbox-next" class="lightbox-nav lightbox-next" aria-label="Next photo">&#10095;</button>
     <a id="lightbox-cta" class="lightbox-cta" href="#" hidden></a>
+  </div>
+</div>
+
+<div id="member-modal" class="modal" hidden>
+  <div class="modal-card member-card" role="dialog" aria-modal="true" aria-labelledby="member-name">
+    <button id="member-close" class="modal-close" aria-label="Close bio">&times;</button>
+    <div class="modal-scroll">
+      <div class="member-bio">
+        <img id="member-photo" class="member-bio-photo" src="" alt="">
+        <div class="member-bio-text">
+          <p class="eyebrow" id="member-role"></p>
+          <h3 class="modal-title" id="member-name"></h3>
+          <p class="member-bio-copy" id="member-copy" hidden></p>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

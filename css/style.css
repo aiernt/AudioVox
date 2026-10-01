@@ -672,6 +672,23 @@ body.lightbox-open{overflow:hidden;}
 .modal-close:hover{background:var(--red);border-color:var(--red);}
 body.modal-open{overflow:hidden;}
 
+/* ---------- Member bio popup ---------- */
+.member-photo{cursor:pointer;}
+.member-card{width:min(92vw,760px);}
+.member-bio{display:flex;align-items:flex-start;gap:30px;}
+.member-bio-photo{
+  flex:none;width:260px;max-width:40%;height:auto;
+  border:6px solid #f4f1e8;box-shadow:0 14px 30px rgba(0,0,0,.6);
+}
+.member-bio-text{min-width:0;}
+.member-bio-text .eyebrow{margin:0 0 6px;}
+.member-bio-copy{color:var(--grey);font-size:1.05rem;line-height:1.6;margin:14px 0 0;white-space:pre-line;}
+.member-bio-copy[hidden]{display:none;}
+@media (max-width:620px){
+  .member-bio{flex-direction:column;align-items:center;text-align:center;gap:20px;}
+  .member-bio-photo{width:200px;max-width:70%;}
+}
+
 #booking-form{display:flex;flex-direction:column;gap:16px;margin-top:22px;}
 .form-row{display:flex;flex-wrap:wrap;gap:16px;}
 .form-row .form-field{flex:1 1 180px;}

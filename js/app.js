@@ -330,6 +330,69 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "ArrowRight") showLightboxPhoto(lightboxIndex + 1);
 });
 
+// ---------- Member bio popup ----------
+// Click a band member's photo to open their bio. Add or edit bios here,
+// keyed by the member's name exactly as it appears under their photo.
+// A member with an empty bio just shows their photo, name, and role.
+// NOTE: placeholder (lorem ipsum) text until the real bios are written.
+const MEMBER_BIOS = {
+  Aaron: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+  Jimmy: "Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+  Brian: "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo.",
+  Curt: "Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet.",
+  Rob: "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident.",
+};
+
+const memberModal = document.getElementById("member-modal");
+if (memberModal) {
+  const memberPhoto = document.getElementById("member-photo");
+  const memberName = document.getElementById("member-name");
+  const memberRole = document.getElementById("member-role");
+  const memberCopy = document.getElementById("member-copy");
+  const memberClose = document.getElementById("member-close");
+
+  function openMemberBio(card) {
+    const name = card.querySelector(".member-name").textContent.trim();
+    memberPhoto.src = card.querySelector(".member-photo").src;
+    memberPhoto.alt = name;
+    memberName.textContent = name;
+    memberRole.textContent = card.querySelector(".member-role").textContent.trim();
+    const bio = (MEMBER_BIOS[name] || "").trim();
+    memberCopy.textContent = bio;
+    memberCopy.hidden = !bio;
+    memberModal.hidden = false;
+    document.body.classList.add("modal-open");
+    memberClose.focus();
+  }
+  function closeMemberBio() {
+    memberModal.hidden = true;
+    memberPhoto.src = "";
+    document.body.classList.remove("modal-open");
+  }
+
+  document.querySelectorAll(".band-member").forEach((card) => {
+    const photo = card.querySelector(".member-photo");
+    if (!photo) return;
+    photo.tabIndex = 0;
+    photo.setAttribute("role", "button");
+    photo.setAttribute("aria-label", `Read ${photo.alt}'s bio`);
+    photo.addEventListener("click", () => openMemberBio(card));
+    photo.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openMemberBio(card);
+      }
+    });
+  });
+  memberClose.addEventListener("click", closeMemberBio);
+  memberModal.addEventListener("click", (e) => {
+    if (e.target === memberModal) closeMemberBio();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !memberModal.hidden) closeMemberBio();
+  });
+}
+
 // ---------- Next show flyer ----------
 // Drop a poster into images/flyer.jpg to promote the next gig on the
 // hero. If it's missing, the whole tilted/taped flyer just doesn't render.
