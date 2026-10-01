@@ -464,9 +464,11 @@ function renderShows(list, events, { past = false } = {}) {
     meta.className = "show-meta";
     meta.textContent = [weekday, time].filter(Boolean).join(" · ");
     if (ev.location) {
-      if (meta.textContent) meta.append(" · ");
+      // Inline after the time on desktop, on its own line on phones (see CSS).
+      const where = document.createElement("span");
+      where.className = "show-where";
       if (past) {
-        meta.append(ev.location);
+        where.textContent = ev.location;
       } else {
         // Upcoming shows link the address out to Google Maps.
         const map = document.createElement("a");
@@ -475,8 +477,9 @@ function renderShows(list, events, { past = false } = {}) {
         map.target = "_blank";
         map.rel = "noopener";
         map.textContent = ev.location;
-        meta.append(map);
+        where.append(map);
       }
+      meta.append(where);
     }
     info.append(title, meta);
 
