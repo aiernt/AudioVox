@@ -299,6 +299,7 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   background:repeating-linear-gradient(135deg, var(--red) 0 22px, #0a0a0b 22px 44px);
   opacity:.9;
 }
+.hero + .hazard-strip{margin-top:0;}
 
 /* ---------- About ---------- */
 .about-grid{
