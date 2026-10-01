@@ -351,10 +351,10 @@ if (nextShow2 && nextShowImg2) {
 const CALENDAR_ID = "43e5d4c9e6b91e4037fa6ed11dd346ec2a66055111ee38d2aab50e6a2820ae67@group.calendar.google.com";
 const CALENDAR_API_KEY = "AIzaSyBFFSj9vYTkiSNF7S-zyIWN41cCzKzaicw";
 const CALENDAR_MAX_SHOWS = 8;
+const PAST_SHOWS_COUNT = 5;
 const SHOW_TZ = "America/New_York";
 
-function renderShows(events) {
-  const list = document.getElementById("show-list");
+function renderShows(list, events, { past = false } = {}) {
   list.replaceChildren();
   if (!events.length) {
     const li = document.createElement("li");
@@ -376,7 +376,7 @@ function renderShows(events) {
       : start.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
 
     const li = document.createElement("li");
-    li.className = "show-item";
+    li.className = past ? "show-item is-past" : "show-item";
 
     const date = document.createElement("div");
     date.className = "show-date";
@@ -403,23 +403,53 @@ function renderShows(events) {
   });
 }
 
+async function fetchCalendarEvents(extraParams) {
+  const params = new URLSearchParams({
+    key: CALENDAR_API_KEY,
+    singleEvents: "true",
+    orderBy: "startTime",
+    ...extraParams,
+  });
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?${params}`
+  );
+  if (!res.ok) throw new Error(`Calendar API ${res.status}`);
+  return (await res.json()).items || [];
+}
+
+async function loadPastShows() {
+  const section = document.getElementById("past-shows");
+  const list = document.getElementById("past-show-list");
+  if (!section || !list) return;
+  const now = new Date();
+  const yearAgo = new Date(now);
+  yearAgo.setFullYear(now.getFullYear() - 1);
+  try {
+    const events = await fetchCalendarEvents({
+      timeMin: yearAgo.toISOString(),
+      timeMax: now.toISOString(),
+      maxResults: "250",
+    });
+    // Newest first, and only the most recent few.
+    const recent = events.reverse().slice(0, PAST_SHOWS_COUNT);
+    if (!recent.length) return;
+    renderShows(list, recent, { past: true });
+    section.hidden = false;
+  } catch (err) {
+    // Past shows are a bonus - if they fail to load, just leave the section hidden.
+    console.error("Could not load past shows:", err);
+  }
+}
+
 async function loadShows() {
   const list = document.getElementById("show-list");
   if (!list) return;
-  const params = new URLSearchParams({
-    key: CALENDAR_API_KEY,
-    timeMin: new Date().toISOString(),
-    singleEvents: "true",
-    orderBy: "startTime",
-    maxResults: String(CALENDAR_MAX_SHOWS),
-  });
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events?${params}`
-    );
-    if (!res.ok) throw new Error(`Calendar API ${res.status}`);
-    const data = await res.json();
-    renderShows(data.items || []);
+    const events = await fetchCalendarEvents({
+      timeMin: new Date().toISOString(),
+      maxResults: String(CALENDAR_MAX_SHOWS),
+    });
+    renderShows(list, events);
   } catch (err) {
     console.error("Could not load shows:", err);
     list.replaceChildren();
@@ -430,6 +460,7 @@ async function loadShows() {
   }
 }
 loadShows();
+loadPastShows();
 
 // ---------- Booking form modal ----------
 // NOTE: submission is currently stubbed - it validates the form and shows the

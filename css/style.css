@@ -502,6 +502,16 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .show-title{display:block;font-family:var(--font-display);font-size:1.5rem;letter-spacing:.03em;color:var(--cream);}
 .show-meta{display:block;color:var(--grey);font-size:.95rem;}
 .show-empty{color:var(--grey);padding:18px 0;}
+.past-shows{margin-top:44px;}
+.past-shows[hidden]{display:none;}
+.past-shows-title{font-size:1.6rem;color:var(--grey);margin:0;}
+.past-shows .show-list{margin-top:16px;}
+.show-item.is-past{background:transparent;padding:12px 20px;}
+.show-item.is-past .show-day,.show-item.is-past .show-title{color:var(--grey);}
+.show-item.is-past .show-month{color:var(--grey-dim);}
+.show-item.is-past .show-day{font-size:2rem;}
+.show-item.is-past .show-title{font-size:1.25rem;}
+.show-item.is-past:hover{border-color:rgba(255,255,255,.08);}
 .show-more{margin-top:18px;}
 .show-more a{color:var(--red-glow);}
 
