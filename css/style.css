@@ -586,6 +586,7 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .footer-links a{color:var(--grey);font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;}
 .footer-links a:hover{color:var(--red-glow);}
 .footer-copy{width:100%;color:var(--grey-dim);font-size:.8rem;margin:0;order:3;}
+.footer-credit{width:100%;color:var(--grey-dim);font-size:.75rem;margin:-10px 0 0;order:4;opacity:.8;}
 
 /* ---------- Lightbox ---------- */
 .lightbox{
