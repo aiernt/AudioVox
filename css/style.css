@@ -269,11 +269,16 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 @media (min-width:1100px){
   /* Wrapper drops out of layout so each flyer positions against the hero. */
   .next-shows{display:contents;}
+  /* Flyers scale with the screen so they stay in the side margins instead of
+     covering the hero text and buttons: they shrink as the window narrows
+     (and on short windows) and reach full size (480px) on large screens.
+     The tilted flyers take up ~1.3x their width, hence the 35vw maths. */
   .next-shows .next-show{
-    position:absolute;left:10%;bottom:18%;
-    width:480px;margin:0;
+    position:absolute;
+    left:4.5%;bottom:18%;
+    width:clamp(150px,min(calc(35vw - 240px),62vh),480px);margin:0;
   }
-  .next-shows .next-show-right{left:auto;right:10%;}
+  .next-shows .next-show-right{left:auto;right:4.5%;}
 }
 @media (max-width:1099px){
   .hero{justify-content:flex-start;min-height:auto;padding:140px 24px 110px;}
