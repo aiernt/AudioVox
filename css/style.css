@@ -774,3 +774,5 @@ body.modal-open{overflow:hidden;}
   color:var(--red-glow);
   filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 22px var(--red-glow)) drop-shadow(0 0 50px var(--red));
 }
+/* Wordmark inside headings: A and V match the heading size, other letters smaller (1.32 x .76 = 1) */
+.av-name.av-inline{font-size:.76em;}
