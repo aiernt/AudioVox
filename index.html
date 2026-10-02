@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Anton+SC&family=Permanent+Marker&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
-<link rel="stylesheet" href="css/style.css?v=44">
+<link rel="stylesheet" href="css/style.css?v=45">
 </head>
 <body>
 <!-- Distress filter for the AudioVox wordmark -->
@@ -72,6 +72,7 @@
           alt="Upcoming show flyer"
           class="next-show-img lightbox-trigger"
           id="next-show-img"
+          data-stamp="ROCKED!"
           data-lightbox-group="flyer"
           data-cta-href="#shows"
           data-cta-label="See Upcoming Shows"
@@ -289,6 +290,7 @@
     <button id="lightbox-close" class="lightbox-close" aria-label="Close photo">&times;</button>
     <button id="lightbox-prev" class="lightbox-nav lightbox-prev" aria-label="Previous photo">&#10094;</button>
     <img id="lightbox-img" src="" alt="">
+    <span id="lightbox-stamp" class="next-show-stamp lightbox-stamp" aria-hidden="true" hidden></span>
     <button id="lightbox-next" class="lightbox-nav lightbox-next" aria-label="Next photo">&#10095;</button>
     <a id="lightbox-cta" class="lightbox-cta" href="#" hidden></a>
   </div>
@@ -376,6 +378,6 @@
 <a href="#top" id="back-to-top" class="back-to-top" aria-label="Back to top"></a>
 
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-<script src="js/app.js?v=17"></script>
+<script src="js/app.js?v=18"></script>
 </body>
 </html>

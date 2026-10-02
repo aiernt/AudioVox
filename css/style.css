@@ -797,3 +797,6 @@ body.modal-open{overflow:hidden;}
   .hero-title-av .av-v .av-fx{-webkit-mask-position:-1.45em -1.1em;mask-position:-1.45em -1.1em;}
   .hero-title-av .av-name > .av-fx:nth-child(4){-webkit-mask-position:-.33em -1.67em;mask-position:-.33em -1.67em;}
 }
+/* ROCKED! stamp carried into the flyer popup; JS sets its size and position over the image. */
+.lightbox-stamp{z-index:4;}
+.lightbox-stamp[hidden]{display:none;}

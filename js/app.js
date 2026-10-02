@@ -269,9 +269,30 @@ const lightboxClose = document.getElementById("lightbox-close");
 const lightboxPrev = document.getElementById("lightbox-prev");
 const lightboxNext = document.getElementById("lightbox-next");
 const lightboxCta = document.getElementById("lightbox-cta");
+const lightboxStamp = document.getElementById("lightbox-stamp");
 
 let lightboxPhotos = [];
 let lightboxIndex = 0;
+
+// Lay the stamp (e.g. ROCKED! on the first flyer) over the enlarged image,
+// sized and placed the same way as on the small flyer: 22% of the image width,
+// centred horizontally and just below the middle.
+function placeLightboxStamp() {
+  const el = lightboxPhotos[lightboxIndex];
+  const text = el && el.dataset.stamp;
+  if (!lightboxStamp) return;
+  if (!text || lightbox.hidden || !lightboxImg.clientWidth) {
+    lightboxStamp.hidden = true;
+    return;
+  }
+  lightboxStamp.textContent = text;
+  lightboxStamp.style.fontSize = lightboxImg.clientWidth * 0.22 + "px";
+  lightboxStamp.style.left = lightboxImg.offsetLeft + lightboxImg.clientWidth / 2 + "px";
+  lightboxStamp.style.top = lightboxImg.offsetTop + lightboxImg.clientHeight * 0.52 + "px";
+  lightboxStamp.hidden = false;
+}
+lightboxImg.addEventListener("load", placeLightboxStamp);
+window.addEventListener("resize", placeLightboxStamp);
 
 function showLightboxPhoto(index) {
   if (!lightboxPhotos.length) return;
@@ -279,6 +300,7 @@ function showLightboxPhoto(index) {
   const el = lightboxPhotos[lightboxIndex];
   lightboxImg.src = el.dataset.src || el.currentSrc || el.src || "";
   lightboxImg.alt = el.dataset.alt || el.alt || "";
+  if (lightboxStamp) lightboxStamp.hidden = true; // re-placed once the new image has loaded
 
   // Some photos (e.g. the show flyer) carry a call-to-action link to show
   // inside the lightbox rather than navigating away the instant you click
@@ -306,10 +328,12 @@ function openLightbox(img) {
   showLightboxPhoto(startIndex === -1 ? 0 : startIndex);
   lightbox.hidden = false;
   document.body.classList.add("lightbox-open");
+  requestAnimationFrame(placeLightboxStamp);
 }
 function closeLightbox() {
   lightbox.hidden = true;
   lightboxImg.src = "";
+  if (lightboxStamp) lightboxStamp.hidden = true;
   document.body.classList.remove("lightbox-open");
 }
 
