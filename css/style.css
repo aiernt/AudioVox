@@ -245,7 +245,7 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   color:#d10f27;font-family:var(--font-display);
   -webkit-text-stroke:.02em #d10f27;
   font-size:22cqw;line-height:1;letter-spacing:.06em;white-space:nowrap;
-  filter:url(#stamp-rough) drop-shadow(0 0 .04em rgba(255,244,228,.95));
+  filter:url(#stamp-rough) url(#stamp-wear) drop-shadow(0 0 .04em rgba(255,244,228,.95));
   pointer-events:none;user-select:none;
 }
 .next-show-right{transform:rotate(15deg);}
