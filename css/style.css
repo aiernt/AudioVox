@@ -759,3 +759,16 @@ body.modal-open{overflow:hidden;}
   .lightbox{padding:16px;}
   .lightbox-close{top:10px;right:12px;width:38px;height:38px;font-size:1.5rem;}
 }
+
+/* ---------- AudioVox wordmark (distressed, big red V) ----------
+   To go back to the old look: restore the "OLD NAME" markup in index.html
+   (nav, hero, footer) and delete this block, or `git revert` the commit. */
+.av-name{display:inline-block;white-space:nowrap;line-height:1;}
+.av-fx{display:inline-block;filter:url(#av-distress);}
+.av-name .av-big{font-size:1.32em;line-height:1;display:inline-block;}
+.av-name .av-v{color:var(--red);}
+.hero-title-av span{color:inherit;text-shadow:none;}
+.hero-title-av .av-name .av-v{
+  color:var(--red-glow);
+  filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 22px var(--red-glow)) drop-shadow(0 0 50px var(--red));
+}

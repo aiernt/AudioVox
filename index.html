@@ -12,15 +12,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
-<link rel="stylesheet" href="css/style.css?v=11">
+<link rel="stylesheet" href="css/style.css?v=13">
 </head>
 <body>
+<!-- Distress filter for the AudioVox wordmark -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><filter id="av-distress" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="7" result="warp"/><feDisplacementMap in="SourceGraphic" in2="warp" scale="2.5" xChannelSelector="R" yChannelSelector="G" result="rough"/><feTurbulence type="fractalNoise" baseFrequency="0.22 0.3" numOctaves="3" seed="11" result="grain"/><feColorMatrix in="grain" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  16 0 0 0 -5.4" result="holes"/><feComposite in="rough" in2="holes" operator="in"/></filter></svg>
 
 <div class="grain-overlay" aria-hidden="true"></div>
 
 <header id="site-header">
   <nav class="nav-wrap">
-    <a href="#top" class="brand"><img src="images/logo.jpg" alt="" class="brand-mark"><span class="brand-text">AUDIO<span>VOX</span></span></a>
+    <a href="#top" class="brand"><img src="images/logo.jpg" alt="" class="brand-mark"><!-- OLD NAME: <span class="brand-text">AUDIO<span>VOX</span></span> --><span class="av-name" aria-label="AudioVox"><span class="av-big" aria-hidden="true"><span class="av-fx">A</span></span><span class="av-fx" aria-hidden="true">UDIO</span><span class="av-big av-v" aria-hidden="true"><span class="av-fx">V</span></span><span class="av-fx" aria-hidden="true">OX</span></span></a>
     <button id="nav-toggle" class="nav-toggle" aria-label="Toggle menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
@@ -39,7 +41,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <filter id="stamp-rough" x="-5%" y="-5%" width="110%" height="110%">
     <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"/>
-    <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" result="rough"/>
+    <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.5" result="rough"/>
     <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" seed="3" result="blotch"/>
     <feColorMatrix in="blotch" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.5 1.65" result="mask"/>
     <feComposite in="rough" in2="mask" operator="in"/>
@@ -52,7 +54,8 @@
     <div class="hero-bg" aria-hidden="true"></div>
     <div class="hero-inner">
       <p class="hero-kicker">CHARLOTTE, NC &mdash; LIVE &amp; LOUD</p>
-      <h1 class="hero-title">AUDIO<span>VOX</span></h1>
+      <!-- OLD NAME: <h1 class="hero-title">AUDIO<span>VOX</span></h1> -->
+      <h1 class="hero-title hero-title-av" aria-label="AudioVox"><span class="av-name"><span class="av-big" aria-hidden="true"><span class="av-fx">A</span></span><span class="av-fx" aria-hidden="true">UDIO</span><span class="av-big av-v" aria-hidden="true"><span class="av-fx">V</span></span><span class="av-fx" aria-hidden="true">OX</span></span></h1>
       <p class="hero-tagline">Charlotte&rsquo;s Ultimate 90&rsquo;s Rock Band</p>
       <p class="hero-sub">Grunge. Alt-Rock. Pop-Punk. Bringing you the best 90&rsquo;s hits &amp; more &mdash; loud, live, and a little dangerous.</p>
       <div class="hero-actions">
@@ -269,7 +272,7 @@
 
 <footer class="site-footer">
   <div class="section-inner footer-inner">
-    <a href="#top" class="brand footer-brand"><span class="brand-text">AUDIO<span>VOX</span></span></a>
+    <a href="#top" class="brand footer-brand"><!-- OLD NAME: <span class="brand-text">AUDIO<span>VOX</span></span> --><span class="av-name" aria-label="AudioVox"><span class="av-big" aria-hidden="true"><span class="av-fx">A</span></span><span class="av-fx" aria-hidden="true">UDIO</span><span class="av-big av-v" aria-hidden="true"><span class="av-fx">V</span></span><span class="av-fx" aria-hidden="true">OX</span></span></a>
     <ul class="footer-links">
       <li><a href="https://www.facebook.com/audiovoxmusic" target="_blank" rel="noopener">Facebook</a></li>
       <li><a href="https://www.instagram.com/audiovox_music" target="_blank" rel="noopener">Instagram</a></li>
