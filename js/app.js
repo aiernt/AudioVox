@@ -373,7 +373,7 @@ const MEMBER_BIOS = {
 
 // Members listed here get the photo on the right with their bio text wrapping
 // around it. Everyone else keeps the photo on the left, text beside it.
-const WRAP_AROUND_MEMBERS = ["Aaron"];
+const WRAP_AROUND_MEMBERS = ["Aaron", "Brian", "Rob"];
 
 const memberModal = document.getElementById("member-modal");
 if (memberModal) {
