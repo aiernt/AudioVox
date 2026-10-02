@@ -679,9 +679,17 @@ body.lightbox-open{overflow:hidden;}
   position:absolute;top:-16px;right:-16px;
   width:36px;height:36px;border-radius:50%;
   background:var(--black-2);border:1px solid rgba(255,255,255,.2);
-  color:var(--cream);font-size:1.5rem;line-height:1;
+  color:var(--cream);font-size:0;line-height:0;padding:0;
   cursor:pointer;transition:background .2s ease, border-color .2s ease;
 }
+/* The X is drawn with two bars so it sits exactly in the middle of the circle
+   (the text glyph sat off-centre because of the font's metrics). */
+.modal-close::before,.modal-close::after{
+  content:"";position:absolute;left:50%;top:50%;
+  width:16px;height:2px;border-radius:1px;background:currentColor;
+}
+.modal-close::before{transform:translate(-50%,-50%) rotate(45deg);}
+.modal-close::after{transform:translate(-50%,-50%) rotate(-45deg);}
 .modal-close:hover{background:var(--red);border-color:var(--red);}
 body.modal-open{overflow:hidden;}
 
@@ -697,9 +705,15 @@ body.modal-open{overflow:hidden;}
 .member-bio-text .eyebrow{margin:0 0 6px;}
 .member-bio-copy{color:var(--grey);font-size:1.05rem;line-height:1.6;margin:14px 0 0;white-space:pre-line;}
 .member-bio-copy[hidden]{display:none;}
+/* Optional layout: photo floated right with the bio text wrapping around it.
+   Turned on per member via WRAP_AROUND_MEMBERS in app.js. */
+.member-card.is-wrap-right .member-bio{display:flow-root;}
+.member-card.is-wrap-right .member-bio-photo{float:right;margin:0 0 18px 34px;}
 @media (max-width:620px){
   .member-bio{flex-direction:column;align-items:center;text-align:center;gap:20px;}
   .member-bio-photo{width:260px;max-width:80%;}
+  .member-card.is-wrap-right .member-bio{display:flex;}
+  .member-card.is-wrap-right .member-bio-photo{float:none;margin:0;}
 }
 
 #booking-form{display:flex;flex-direction:column;gap:16px;margin-top:22px;}

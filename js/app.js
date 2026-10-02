@@ -371,6 +371,10 @@ const MEMBER_BIOS = {
   Rob: "Rob grew up in Northern New York, so close to Canada he could practically see it from his porch. In 1997 he moved to the Charlotte area in search of warmer weather and louder amps. He was learning guitar chords at five, then spent his teen years behind a drum kit before switching back to guitar. He also sings, which Brian is very grateful for. Along the way he's played with Barefoot Pilgrim and Exit 85, and now he's here with AudioVox, still chasing the sound of a decade he never really left. By his own math, Rob spends 50% of his time tuning, 30% playing it wrong, but that last 20% is where the magic happens.",
 };
 
+// Members listed here get the photo on the right with their bio text wrapping
+// around it. Everyone else keeps the photo on the left, text beside it.
+const WRAP_AROUND_MEMBERS = ["Aaron"];
+
 const memberModal = document.getElementById("member-modal");
 if (memberModal) {
   const memberPhoto = document.getElementById("member-photo");
@@ -386,6 +390,7 @@ if (memberModal) {
     memberName.textContent = name;
     memberRole.textContent = card.querySelector(".member-role").textContent.trim();
     const bio = (MEMBER_BIOS[name] || "").trim();
+    memberModal.querySelector(".member-card").classList.toggle("is-wrap-right", WRAP_AROUND_MEMBERS.includes(name));
     memberCopy.textContent = bio;
     memberCopy.hidden = !bio;
     memberModal.hidden = false;
