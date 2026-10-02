@@ -777,3 +777,7 @@ body.modal-open{overflow:hidden;}
 }
 /* Wordmark inside headings: A and V match the heading size, other letters smaller (Anton SC caps run taller than Bebas, so .6 x 1.32 = ~.79 lines up with the heading) */
 .av-name.av-inline{font-size:.6em;}
+/* iOS Safari test: SVG filters on HTML text can misplace pieces of the wordmark there, so turn them off on iOS only. Delete this block to restore the flecks/glitch on iPhones. */
+@supports (-webkit-touch-callout:none){
+  .hero-title-av .av-fx{filter:none;}
+}
