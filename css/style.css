@@ -763,7 +763,7 @@ body.modal-open{overflow:hidden;}
 /* ---------- AudioVox wordmark (distressed, big red V) ----------
    To go back to the old look: restore the "OLD NAME" markup in index.html
    (nav, hero, footer) and delete this block, or `git revert` the commit. */
-.av-name{display:inline-block;white-space:nowrap;line-height:1;font-family:'Anton SC',var(--font-display);/* tried: 'Staatliches', 'League Gothic', 'Anton', 'Rubik Distressed' */}
+.av-name{display:inline-block;white-space:nowrap;line-height:1;font-family:'Bebas Neue',var(--font-display);/* tried: 'Anton SC', 'Staatliches', 'League Gothic', 'Anton', 'Rubik Distressed' */}
 .av-fx{display:inline-block;/* glitch is hero-only; small versions: filter:url(#av-glitch-sm); */}
 .hero-title-av .av-fx{filter:url(#av-glitch) url(#av-flecks);/* wood-checking cracks: add url(#av-check) between them */}
 .av-name .av-big{font-size:1.32em;line-height:1;display:inline-block;}
@@ -775,8 +775,8 @@ body.modal-open{overflow:hidden;}
   color:var(--red-glow);
   filter:drop-shadow(0 0 6px #fff) drop-shadow(0 0 22px var(--red-glow)) drop-shadow(0 0 50px var(--red));
 }
-/* Wordmark inside headings: A and V match the heading size, other letters smaller (Anton SC caps run taller than Bebas, so .6 x 1.32 = ~.79 lines up with the heading) */
-.av-name.av-inline{font-size:.6em;}
+/* Wordmark inside headings: A and V match the heading size, other letters smaller (Bebas Neue everywhere, so .76 x 1.32 = ~1 lines up with the heading) */
+.av-name.av-inline{font-size:.76em;}
 
 /* Phones: the name is about half the desktop size, so use a finer fleck filter and smaller tear so they scale with it. */
 @media (max-width:600px){
