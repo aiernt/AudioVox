@@ -1,0 +1,11 @@
+# Files in this repo that should NOT be published as part of the website.
+wrangler.jsonc
+worker
+functions
+.assetsignore
+.gitignore
+.dev.vars
+*.md
+wordmark-options*.html
+.git
+node_modules

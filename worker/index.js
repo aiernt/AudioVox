@@ -1,11 +1,12 @@
-// Cloudflare Pages Function: POST /api/booking
+// Cloudflare Worker entry point (see wrangler.jsonc).
 //
-// Receives the booking form from the site and relays it to the band's internal
-// inbox through Resend (https://resend.com). The Resend API key lives only in
-// Cloudflare (never in the page or this repo).
+// The site itself is plain static files served by Workers Static Assets. This
+// script only runs for POST /api/booking, which receives the booking form and
+// relays it to the band's internal inbox through Resend (https://resend.com).
+// The Resend API key lives only in Cloudflare (never in the page or this repo).
 //
-// Settings (Cloudflare dashboard -> Workers & Pages -> this project ->
-// Settings -> Variables and Secrets):
+// Settings (Cloudflare dashboard -> Workers & Pages -> audiovox -> Settings ->
+// Variables and Secrets):
 //   RESEND_API_KEY  (secret)  your Resend API key
 //   BOOKING_TO      (text)    internal address(es) to receive requests, comma-separated
 //   BOOKING_FROM    (text)    sender, e.g. "AudioVox Website <bookings@yourdomain.com>"
@@ -25,7 +26,7 @@ const oneLine = (v) => v.replace(/[\r\n]+/g, " ");
 const escapeHtml = (s) =>
   s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-export async function onRequestPost({ request, env }) {
+async function handleBooking(request, env) {
   // Only accept posts that come from this site's own pages.
   const origin = request.headers.get("Origin");
   if (origin && new URL(origin).host !== new URL(request.url).host) {
@@ -45,9 +46,10 @@ export async function onRequestPost({ request, env }) {
   } catch {
     return json({ ok: false, error: "Invalid request." }, 400);
   }
+  if (!data || typeof data !== "object") return json({ ok: false, error: "Invalid request." }, 400);
 
   // Honeypot: a real visitor never fills this. Pretend it worked, send nothing.
-  if (data && data.website) return json({ ok: true });
+  if (data.website) return json({ ok: true });
 
   const f = {
     name: clean(data.name, MAX.name),
@@ -98,5 +100,14 @@ export async function onRequestPost({ request, env }) {
   return json({ ok: true });
 }
 
-// Anything other than POST.
-export const onRequest = () => json({ ok: false, error: "Method not allowed" }, 405);
+export default {
+  async fetch(request, env) {
+    const { pathname } = new URL(request.url);
+    if (pathname === "/api/booking") {
+      if (request.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
+      return handleBooking(request, env);
+    }
+    // Everything else is the static site.
+    return env.ASSETS.fetch(request);
+  },
+};

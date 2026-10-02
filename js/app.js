@@ -648,7 +648,7 @@ if (openBookingBtn) {
     sendBookingRequest(data);
   });
 
-  // Posts to the Cloudflare Pages Function in functions/api/booking.js, which
+  // Posts to the Cloudflare Worker route in worker/index.js (/api/booking), which
   // relays the request to the band's inbox via Resend.
   async function sendBookingRequest(data) {
     const submitBtn = bookingForm.querySelector('button[type="submit"]');
