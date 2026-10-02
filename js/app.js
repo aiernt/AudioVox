@@ -577,10 +577,8 @@ loadShows();
 loadPastShows();
 
 // ---------- Booking form modal ----------
-// NOTE: submission is currently stubbed - it validates the form and shows the
-// success screen, but does not actually send anything anywhere yet. The
-// composed message is logged to the console so it can be reviewed before we
-// wire up a real send (mailto link or a form-backend service).
+// Spam checks run in the browser (honeypot + quick math check); the request is
+// then sent to /api/booking, which emails it to the band through Resend.
 const bookingModal = document.getElementById("booking-modal");
 const openBookingBtn = document.getElementById("open-booking-form");
 const bookingClose = document.getElementById("booking-close");
@@ -591,6 +589,7 @@ const bookingSuccess = document.getElementById("booking-success");
 const bookingMathLabel = document.getElementById("booking-math-label");
 const bookingMathInput = document.getElementById("booking-math-input");
 const bookingMathError = document.getElementById("booking-math-error");
+const bookingSendError = document.getElementById("booking-send-error");
 
 let bookingMathAnswer = 0;
 function newBookingMathQuestion() {
@@ -612,6 +611,7 @@ function closeBookingModal() {
   bookingFormWrap.hidden = false;
   bookingSuccess.hidden = true;
   bookingMathError.hidden = true;
+  bookingSendError.hidden = true;
 }
 
 if (openBookingBtn) {
@@ -645,11 +645,36 @@ if (openBookingBtn) {
       return;
     }
 
-    // TODO: replace this with a real send once the delivery method is confirmed.
-    console.log("Booking request (not yet sent):", data);
-    bookingFormWrap.hidden = true;
-    bookingSuccess.hidden = false;
+    sendBookingRequest(data);
   });
+
+  // Posts to the Cloudflare Pages Function in functions/api/booking.js, which
+  // relays the request to the band's inbox via Resend.
+  async function sendBookingRequest(data) {
+    const submitBtn = bookingForm.querySelector('button[type="submit"]');
+    const originalLabel = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Sending…";
+    bookingSendError.hidden = true;
+    try {
+      const { mathAnswer, ...fields } = data; // the quick-check answer stays in the browser
+      const res = await fetch("/api/booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result.ok) throw new Error(result.error || `Send failed (${res.status})`);
+      bookingFormWrap.hidden = true;
+      bookingSuccess.hidden = false;
+    } catch (err) {
+      console.error("Booking request failed:", err);
+      bookingSendError.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalLabel;
+    }
+  }
 }
 
 // ---------- Footer year ----------
