@@ -763,11 +763,11 @@ body.modal-open{overflow:hidden;}
 /* ---------- AudioVox wordmark (distressed, big red V) ----------
    To go back to the old look: restore the "OLD NAME" markup in index.html
    (nav, hero, footer) and delete this block, or `git revert` the commit. */
-.av-name{display:inline-block;white-space:nowrap;line-height:1;font-family:'Rubik Distressed',var(--font-display);}
-.av-fx{display:inline-block;/* filter:url(#av-distress); (SVG filter version, off while using Rubik Distressed) */}
+.av-name{display:inline-block;white-space:nowrap;line-height:1;font-family:'Anton',var(--font-display);/* tried: 'Rubik Distressed' (too short/chunky) */}
+.av-fx{display:inline-block;filter:url(#av-distress);}
 .av-name .av-big{font-size:1.32em;line-height:1;display:inline-block;}
 .av-name .av-v{color:var(--red);}
-.hero-title-av{font-size:clamp(2.4rem,9.5vw,6.5rem);}
+.hero-title-av{font-size:clamp(3.4rem,16vw,9rem);}
 .hero-title-av span{color:inherit;text-shadow:none;}
 .hero-title-av .av-name .av-v{
   color:var(--red-glow);
