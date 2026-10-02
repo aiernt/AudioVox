@@ -765,7 +765,7 @@ body.modal-open{overflow:hidden;}
    (nav, hero, footer) and delete this block, or `git revert` the commit. */
 .av-name{display:inline-block;white-space:nowrap;line-height:1;font-family:'Anton SC',var(--font-display);/* tried: 'Staatliches', 'League Gothic', 'Anton', 'Rubik Distressed' */}
 .av-fx{display:inline-block;/* glitch is hero-only; small versions: filter:url(#av-glitch-sm); */}
-.hero-title-av .av-fx{filter:url(#av-glitch);}
+.hero-title-av .av-fx{filter:url(#av-glitch) url(#av-check);}
 .av-name .av-big{font-size:1.32em;line-height:1;display:inline-block;}
 .av-name .av-v{color:var(--red);}
 .hero-title-av{font-size:clamp(3.2rem,17.5vw,10rem);}
@@ -776,10 +776,3 @@ body.modal-open{overflow:hidden;}
 }
 /* Wordmark inside headings: A and V match the heading size, other letters smaller (Anton SC caps run taller than Bebas, so .6 x 1.32 = ~.79 lines up with the heading) */
 .av-name.av-inline{font-size:.6em;}
-/* Hero wordmark: checkered fill on the cream letters (V stays solid red). Remove this block to undo. */
-.hero-title-av .av-name .av-fx{
-  background:conic-gradient(#eee8d9 25%,#a39b88 0 50%,#eee8d9 0 75%,#a39b88 0) 0 0/.16em .16em;
-  -webkit-background-clip:text;background-clip:text;
-  -webkit-text-fill-color:transparent;
-}
-.hero-title-av .av-name .av-v .av-fx{background:none;-webkit-text-fill-color:currentColor;}
