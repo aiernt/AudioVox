@@ -249,7 +249,12 @@ export async function handleSongs(request, env, ctx) {
       const q = (url.searchParams.get("q") || "").trim().slice(0, 80);
       if (q.length < 2) return json({ ok: true, results: [] });
       if (await overLimit(db, voter, "search", SEARCHES_PER_MINUTE, 60000)) return json({ ok: false, error: "Slow down a little and try again in a moment." }, 429);
-      const data = await itunes("search?" + new URLSearchParams({ term: q, media: "music", entity: "song", limit: "25", country: "US" }), ctx);
+      let data;
+      try { data = await itunes("search?" + new URLSearchParams({ term: q, media: "music", entity: "song", limit: "25", country: "US" }), ctx); }
+      catch (err) {
+        console.error("Song search failed:", err && err.message);
+        return json({ ok: false, error: "Search isn’t available right now. Please try again in a moment.", detail: String(err && err.message || err).slice(0, 120) }, 502);
+      }
       const { results: onList } = await db.prepare("SELECT id, key FROM songs").all();
       const listed = new Map(onList.map((r) => [r.key, r.id]));
       const seen = new Set(), results = [];
