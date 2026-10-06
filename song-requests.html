@@ -246,6 +246,41 @@
   }
   const isKnown = (it) => { const t = titleKey(it.song); return knownByTitle.has(t) || knownStrict.some((k) => k.title === t && norm(it.artist).includes(k.artist)); };
 
+  // When Apple has the same song on several albums, show the original album (and its cover).
+  // 1) Compilations, live albums, soundtracks, covers and karaoke are only used if nothing else exists.
+  // 2) Of the rest, the album the song appears on most often wins (originals get the most reissues:
+  //    "Superunknown" shows up 5 times for "Black Hole Sun", the "Telephantasm" best-of only 3).
+  // 3) Then the plain album beats a remaster/deluxe/anniversary edition, then the earliest date, then Apple's order.
+  function editionPenalty(it) {
+    const a = String(it.album || "").toLowerCase();
+    if (/karaoke|tribute|lullaby|rockabye|in the style of|originally performed|backing track|made famous/.test(a)) return 3;
+    if (it.albumArtist && norm(it.albumArtist) !== norm(it.artist)) return 2;   // someone else's album (a compilation)
+    if (/greatest|hits|best of|collection|anthology|essential|compilation|\blive\b|soundtrack|now that|sampler|number 1|#1|\ba-sides\b|\bb-sides\b|singles|rarities|retrospective/.test(a)) return 2;
+    if (/remaster|deluxe|anniversary|edition|expanded|bonus|reissue|- single|- ep|version|sped.?up|slowed/.test(a)) return 1;
+    return 0;
+  }
+  // The studio version beats "(Acoustic Version)", "(Live ...)", "(Demo)", "(Remix)"... and "(2019 Remaster)" titles.
+  // Only the bracketed / after-a-dash part of the title is checked, so songs like "Live Forever" aren't affected.
+  function trackPenalty(song) {
+    const extra = (String(song).match(/[\(\[].*?[\)\]]|\s-\s.*$/g) || []).join(" ");
+    if (/\b(live|acoustic|demo|remix|instrumental|karaoke|unplugged|session|rehearsal|mix|edit|version|take)\b/i.test(extra)) return 2;
+    if (/remaster/i.test(extra)) return 1;
+    return 0;
+  }
+  const baseAlbum = (a) => norm(String(a || "").replace(/[\(\[].*?[\)\]]/g, "").replace(/\s+-\s+(single|ep)\s*$/i, ""));
+  function chooseVersion(list) {
+    const scored = list.map((it, i) => ({ it, i, p: editionPenalty(it), t: trackPenalty(it.song), base: baseAlbum(it.album), d: String(it.date || "9999").slice(0, 10) }));
+    const pool = scored.some((s) => s.p < 2) ? scored.filter((s) => s.p < 2) : scored;
+    const count = new Map();
+    pool.forEach((s) => count.set(s.base, (count.get(s.base) || 0) + 1));
+    pool.sort((a, b) => (a.t - b.t) || (count.get(b.base) - count.get(a.base)) || (a.p - b.p) || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || (a.i - b.i));
+    return pool[0].it;
+  }
+  function pickOriginals(items, keyFn) {
+    const groups = new Map();
+    for (const it of items) { const k = keyFn(it); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+    return [...groups.values()].map(chooseVersion);    // in the order Apple first listed each song
+  }
   const searchCache = new Map();
   function itunes(term) {
     const key = term.toLowerCase();
@@ -258,7 +293,7 @@
       window[cb] = (json) => {
         done();
         const items = (json.results || []).map((r) => ({ trackId: r.trackId, song: r.trackName || "", artist: r.artistName || "",
-          year: Number(String(r.releaseDate || "").slice(0, 4)) || 0, art: r.artworkUrl100 || "", preview: r.previewUrl || "" }));
+          year: Number(String(r.releaseDate || "").slice(0, 4)) || 0, art: r.artworkUrl100 || "", preview: r.previewUrl || "", album: r.collectionName || "", albumArtist: r.collectionArtistName || "", date: r.releaseDate || "" }));
         searchCache.set(key, items); resolve(items);
       };
       s.onerror = () => { done(); reject(new Error("search failed")); };
@@ -445,8 +480,7 @@
         if (mine !== seq) return;
         const listed = new Map(songs.map((s) => [songKey(s.song, s.artist), s.id]));
         const seen = new Set(), items = [];
-        for (const it of raw) {
-          if (!allowed(it)) continue;
+        for (const it of pickOriginals(raw.filter(allowed), (x) => songKey(x.song, x.artist))) {
           const k = songKey(it.song, it.artist);
           if (seen.has(k)) continue;
           seen.add(k);
