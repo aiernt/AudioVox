@@ -1,18 +1,18 @@
 // "Songs We Should Learn": the shared, public song-request list (song-requests.html).
 // Stored in a Cloudflare D1 database (binding "DB", see wrangler.jsonc) and served from /api/songs*.
 //
-// Fans search Apple's music catalog (through this Worker), then add a real song to the list or vote
-// for one already on it. Every rule is checked here, on the server, so it can't be skipped:
+// Fans search Apple's music catalog from their own browser (Apple rate-limits requests coming from Cloudflare's
+// servers, so the search can't run here), then add a song or vote for one already on the list.
+// Every rule is checked again here, on the server, so it can't be skipped:
 //   - songs released from 1989 to now
 //   - no songs with an explicit word spelled out in the TITLE (explicit lyrics and masked spellings are fine)
 //   - songs the band already plays (KNOWN_SONGS) can't be requested
 //   - a quick math check before adding, 5 new songs per visitor per hour, one vote per song per visitor
 //
-//   GET    /api/songs                 the list, most votes first
-//   GET    /api/songs/search?q=...    search Apple's catalog (results are cached for a day)
+//   GET    /api/songs                 the list, most votes first (plus the band's "already play" list for the page)
 //   GET    /api/songs/challenge       a fresh "what's 3 + 4?" question
 //   POST   /api/songs/unlock          answer the question -> a pass that allows adding for a few hours
-//   POST   /api/songs                 add a song {trackId, unlock}; a song already on the list just gets a vote
+//   POST   /api/songs                 add a song {trackId, song, artist, year, art, preview, unlock}; a listed song just gets a vote
 //   POST   /api/songs/:id/vote        vote for a song
 //   DELETE /api/songs/:id             remove a song (band only: "Authorization: Bearer <ADMIN_TOKEN>")
 //
@@ -25,7 +25,6 @@ const MIN_YEAR = 1989;
 const LIST_LIMIT = 500;            // most songs the list will hold (stops a flood)
 const NEW_SONGS_PER_HOUR = 5;      // per visitor
 const VOTES_PER_HOUR = 60;         // per visitor
-const SEARCHES_PER_MINUTE = 30;    // per visitor, so nobody can use us to hammer Apple
 const CHALLENGES_PER_HOUR = 30;    // per visitor
 const CHALLENGE_TTL = 30 * 60 * 1000;
 const UNLOCK_TTL = 4 * 3600 * 1000;
@@ -183,10 +182,10 @@ function mapTrack(r) {
     art: r.artworkUrl100 || "", preview: r.previewUrl || "",
   };
 }
-async function itunes(params, ctx) {
+async function itunes(params, ctx, host) {
   const url = "https://itunes.apple.com/" + params;
   const cache = caches.default;
-  const cacheKey = new Request(url);
+  const cacheKey = new Request(`https://${host}/__cache/itunes/${params}`);
   const hit = await cache.match(cacheKey);
   if (hit) return hit.json();
   const res = await fetch(url, { headers: { "User-Agent": "AudioVox song requests (audiovox.huddlegab.com)" } });
@@ -242,32 +241,7 @@ export async function handleSongs(request, env, ctx) {
     const voter = await visitorId(request, env);
 
     // GET /api/songs
-    if (parts.length === 2 && method === "GET") return json({ ok: true, songs: await listSongs(db, voter) });
-
-    // GET /api/songs/search?q=
-    if (parts.length === 3 && parts[2] === "search" && method === "GET") {
-      const q = (url.searchParams.get("q") || "").trim().slice(0, 80);
-      if (q.length < 2) return json({ ok: true, results: [] });
-      if (await overLimit(db, voter, "search", SEARCHES_PER_MINUTE, 60000)) return json({ ok: false, error: "Slow down a little and try again in a moment." }, 429);
-      let data;
-      try { data = await itunes("search?" + new URLSearchParams({ term: q, media: "music", entity: "song", limit: "25", country: "US" }), ctx); }
-      catch (err) {
-        console.error("Song search failed:", err && err.message);
-        return json({ ok: false, error: "Search isn’t available right now. Please try again in a moment.", detail: String(err && err.message || err).slice(0, 120) }, 502);
-      }
-      const { results: onList } = await db.prepare("SELECT id, key FROM songs").all();
-      const listed = new Map(onList.map((r) => [r.key, r.id]));
-      const seen = new Set(), results = [];
-      for (const t of (data.results || []).map(mapTrack)) {
-        if (!t.trackId || !t.song || !t.artist || !inYearRange(t.year) || explicitTitle(t.song)) continue;
-        const k = songKey(t.song, t.artist);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        results.push({ ...t, known: isKnown(t.song, t.artist), listedId: listed.get(k) || null });
-        if (results.length >= 8) break;
-      }
-      return json({ ok: true, results });
-    }
+    if (parts.length === 2 && method === "GET") return json({ ok: true, songs: await listSongs(db, voter), known: KNOWN_SONGS });
 
     // GET /api/songs/challenge
     if (parts.length === 3 && parts[2] === "challenge" && method === "GET") {
@@ -306,11 +280,22 @@ export async function handleSongs(request, env, ctx) {
 
       const trackId = Number(data.trackId);
       if (!Number.isInteger(trackId) || trackId < 1) return json({ ok: false, error: "Please pick a song from the search." }, 400);
-      // Look the song up ourselves: we save what Apple says, never what the page claims.
-      const found = (await itunes("lookup?" + new URLSearchParams({ id: String(trackId), entity: "song", country: "US" }), ctx)).results || [];
-      const raw = found.find((r) => r.trackId === trackId && (r.kind === "song" || r.wrapperType === "track"));
-      if (!raw) return json({ ok: false, error: "We couldn’t find that song. Try searching again." }, 404);
-      const t = mapTrack(raw);
+      // Look the song up with Apple ourselves when Apple will answer us, and save what Apple says.
+      // Apple often refuses requests from Cloudflare's servers; then we use what the page sent, after checking
+      // it: the rules below, and the picture and preview have to be Apple links.
+      let t;
+      try {
+        const found = (await itunes("lookup?" + new URLSearchParams({ id: String(trackId), entity: "song", country: "US" }), ctx, url.host)).results || [];
+        const raw = found.find((r) => r.trackId === trackId && (r.kind === "song" || r.wrapperType === "track"));
+        if (!raw) return json({ ok: false, error: "We couldn’t find that song. Try searching again." }, 404);
+        t = mapTrack(raw);
+      } catch {
+        const str = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, max) : "");
+        t = { trackId, song: str(data.song, 200), artist: str(data.artist, 200), year: Number(data.year) || 0, art: str(data.art, 500), preview: str(data.preview, 500) };
+        if (!t.song || !t.artist) return json({ ok: false, error: "Please pick a song from the search." }, 400);
+        if (t.art && !/^https:\/\/is\d+-ssl\.mzstatic\.com\//.test(t.art)) t.art = "";
+        if (t.preview && !/^https:\/\/audio-ssl\.itunes\.apple\.com\//.test(t.preview)) t.preview = "";
+      }
       if (!inYearRange(t.year)) return json({ ok: false, error: `We only add songs from ${MIN_YEAR} on.` }, 400);
       if (explicitTitle(t.song)) return json({ ok: false, error: "Sorry, we can’t add that one to the list." }, 400);
       if (isKnown(t.song, t.artist)) return json({ ok: false, code: "known", error: `We already play “${t.song}”! Come catch it at a show.` }, 409);

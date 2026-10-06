@@ -225,6 +225,47 @@
     return data;
   }
 
+  // ---------- searching Apple's catalog ----------
+  // The search runs here in the visitor's browser: Apple rate-limits requests that come from Cloudflare's servers.
+  // Apple blocks normal cross-site requests from web pages but offers a "callback" (JSONP) option, used here.
+  // The same rules are checked again on the server when a song is added.
+  const MIN_YEAR = 1989, MAX_YEAR = new Date().getFullYear();
+  const BLOCKED_TITLE_WORDS = ["fuck", "fucking", "fucked", "fucker", "fuckin", "motherfucker", "shit", "shitty", "shithead", "bullshit", "horseshit", "dipshit",
+    "bitch", "bitches", "cunt", "cock", "cocksucker", "dick", "dickhead", "pussy", "whore", "slut", "bastard", "asshole", "tits", "cum", "wank",
+    "nigger", "nigga", "faggot", "fag", "retard"];
+  const blockedTitleRx = new RegExp("(?:^|[^a-z])(?:" + BLOCKED_TITLE_WORDS.join("|") + ")(?:$|[^a-z])", "i");
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const titleKey = (song) => norm(String(song).replace(/[\(\[].*?[\)\]]/g, ""));
+  const artistKey = (a) => norm(String(a).replace(/^the\s+/i, ""));
+  const songKey = (song, artist) => `${titleKey(song)}|${artistKey(artist)}`;
+  const allowed = (it) => it.trackId && it.song && it.artist && it.year >= MIN_YEAR && it.year <= MAX_YEAR && !blockedTitleRx.test(it.song.normalize("NFKD").replace(/[\u0300-\u036f]/g, ""));
+  let knownByTitle = new Set(), knownStrict = [];
+  function setKnown(list) {
+    knownByTitle = new Set(list.filter((k) => !k[2]).map((k) => titleKey(k[0])));
+    knownStrict = list.filter((k) => k[2]).map((k) => ({ title: titleKey(k[0]), artist: artistKey(k[1]) }));
+  }
+  const isKnown = (it) => { const t = titleKey(it.song); return knownByTitle.has(t) || knownStrict.some((k) => k.title === t && norm(it.artist).includes(k.artist)); };
+
+  const searchCache = new Map();
+  function itunes(term) {
+    const key = term.toLowerCase();
+    if (searchCache.has(key)) return Promise.resolve(searchCache.get(key));
+    return new Promise((resolve, reject) => {
+      const cb = "avItunes" + Math.random().toString(36).slice(2);
+      const s = document.createElement("script");
+      const done = () => { delete window[cb]; s.remove(); clearTimeout(timer); };
+      const timer = setTimeout(() => { done(); reject(new Error("timeout")); }, 9000);
+      window[cb] = (json) => {
+        done();
+        const items = (json.results || []).map((r) => ({ trackId: r.trackId, song: r.trackName || "", artist: r.artistName || "",
+          year: Number(String(r.releaseDate || "").slice(0, 4)) || 0, art: r.artworkUrl100 || "", preview: r.previewUrl || "" }));
+        searchCache.set(key, items); resolve(items);
+      };
+      s.onerror = () => { done(); reject(new Error("search failed")); };
+      s.src = "https://itunes.apple.com/search?" + new URLSearchParams({ term, media: "music", entity: "song", limit: 25, country: "US", callback: cb });
+      document.head.appendChild(s);
+    });
+  }
   // ---------- one shared audio player ----------
   const audio = new Audio();
   let playingBtn = null;
@@ -323,7 +364,7 @@
     node.scrollIntoView({ behavior: "smooth", block: "center" }); node.classList.remove("is-pulse"); void node.offsetWidth; node.classList.add("is-pulse");
   }
   async function loadList() {
-    try { setSongs((await api("/api/songs")).songs); }
+    try { const data = await api("/api/songs"); setKnown(data.known || []); setSongs(data.songs); }
     catch { grid.replaceChildren(el("p", "sl-empty", "Couldn\u2019t load the list right now. Please try again in a moment.")); }
   }
 
@@ -357,7 +398,7 @@
     if (!unlockToken) { pending = it; say("Answer the quick check first, then we\u2019ll add your song."); askQuestion(); return; }
     say("Adding\u2026");
     try {
-      const data = await api("/api/songs", { method: "POST", body: JSON.stringify({ trackId: it.trackId, unlock: unlockToken, website: $("sg-hp").value }) });
+      const data = await api("/api/songs", { method: "POST", body: JSON.stringify({ trackId: it.trackId, song: it.song, artist: it.artist, year: it.year, art: it.art, preview: it.preview, unlock: unlockToken, website: $("sg-hp").value }) });
       if (!data.merged) freshIds.add(data.id);
       setSongs(data.songs);
       if (data.id) pulse(data.id);
@@ -399,8 +440,22 @@
     say("Searching\u2026");
     const mine = ++seq;
     timer = setTimeout(async () => {
-      try { const data = await api("/api/songs/search?" + new URLSearchParams({ q: term })); if (mine === seq) showResults(data.results); }
-      catch (err) { if (mine === seq) say(err.status === 429 ? err.message : "Search isn\u2019t available right now. Please try again in a moment."); }
+      try {
+        const raw = await itunes(term);
+        if (mine !== seq) return;
+        const listed = new Map(songs.map((s) => [songKey(s.song, s.artist), s.id]));
+        const seen = new Set(), items = [];
+        for (const it of raw) {
+          if (!allowed(it)) continue;
+          const k = songKey(it.song, it.artist);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          items.push({ ...it, known: isKnown(it), listedId: listed.get(k) || null });
+          if (items.length >= 8) break;
+        }
+        showResults(items);
+      }
+      catch { if (mine === seq) say("Search isn\u2019t available right now. Please try again in a moment."); }
     }, 350);
   });
   q.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
