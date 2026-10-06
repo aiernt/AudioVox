@@ -1,8 +1,10 @@
 // Cloudflare Worker entry point (see wrangler.jsonc).
 //
 // The site itself is plain static files served by Workers Static Assets. This
-// script only runs for POST /api/booking, which receives the booking form and
-// relays it to the band's internal inbox through Resend (https://resend.com).
+// script only runs for /api/*:
+//   POST /api/booking  receives the booking form and relays it to the band's
+//                      internal inbox through Resend (https://resend.com)
+//   /api/songs*        the shared song-request list (see songs.js)
 // The Resend API key lives only in Cloudflare (never in the page or this repo).
 //
 // Settings (Cloudflare dashboard -> Workers & Pages -> audiovox -> Settings ->
@@ -11,6 +13,8 @@
 //   BOOKING_TO      (text)    internal address(es) to receive requests, comma-separated
 //   BOOKING_FROM    (text)    sender, e.g. "AudioVox Website <bookings@yourdomain.com>"
 //                             (the domain must be verified in Resend)
+
+import { handleSongs } from "./songs.js";
 
 const MAX = { name: 120, email: 200, phone: 60, date: 40, venue: 200, details: 4000 };
 
@@ -101,8 +105,11 @@ async function handleBooking(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
+    if (pathname === "/api/songs" || pathname.startsWith("/api/songs/")) {
+      return handleSongs(request, env, ctx);
+    }
     if (pathname === "/api/booking") {
       if (request.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);
       return handleBooking(request, env);

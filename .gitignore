@@ -4,3 +4,4 @@ desktop.ini
 
 # Local Cloudflare secrets (e.g. RESEND_API_KEY for local testing) - never commit
 .dev.vars
+.wrangler

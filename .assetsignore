@@ -9,3 +9,4 @@ functions
 wordmark-options*.html
 .git
 node_modules
+.wrangler
