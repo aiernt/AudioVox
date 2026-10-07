@@ -19,6 +19,7 @@
 //   -- band only ("Authorization: Bearer <ADMIN_TOKEN>"; open /song-requests#admin=TOKEN once per device):
 //   DELETE /api/songs/:id             remove a song
 //   GET    /api/songs/export          download the list as a spreadsheet (CSV)
+//   POST   /api/songs/test-email      send a test "new song" email and show Resend's reply
 //
 // Settings (Cloudflare dashboard -> Workers & Pages -> audiovox -> Settings -> Variables and secrets):
 //   SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET  (secrets) the Spotify app keys
@@ -293,11 +294,11 @@ async function overLimit(db, voter, kind, limit, bucketMs) {
   return row.n > limit;
 }
 
-function notifyNewSong(env, ctx, s, siteUrl) {
-  if (env.SONG_NOTIFY === "off" || !env.RESEND_API_KEY || !env.BOOKING_TO || !env.BOOKING_FROM) return;
+// Sends the "new song" email through Resend and reports what Resend said (logged, and shown by the admin test button).
+function songEmail(env, s, siteUrl) {
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const page = `${siteUrl}/song-requests`;
-  ctx.waitUntil(fetch("https://api.resend.com/emails", {
+  return fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -307,7 +308,16 @@ function notifyNewSong(env, ctx, s, siteUrl) {
       text: `A fan added a song to the request list.\n\nSong: ${s.song}\nArtist: ${s.artist}\nYear: ${s.year || "-"}\n${s.url ? `On Spotify: ${s.url}\n` : ""}\nSee the list: ${page}\n`,
       html: `<h2>New song request</h2><p><b>${esc(s.song)}</b> &mdash; ${esc(s.artist)}${s.year ? ` (${s.year})` : ""}</p>${s.url ? `<p><a href="${esc(s.url)}">Listen on Spotify</a></p>` : ""}<p><a href="${esc(page)}">See the list</a></p>`,
     }),
-  }).catch((err) => console.error("Song notify failed", err)));
+  }).then(async (res) => {
+    const body = (await res.text()).slice(0, 500);
+    if (!res.ok) console.error("Song email refused by Resend", res.status, body);
+    return { ok: res.ok, status: res.status, body };
+  }).catch((err) => { console.error("Song email failed", err && err.message); return { ok: false, status: 0, body: String(err && err.message || err) }; });
+}
+function notifyNewSong(env, ctx, s, siteUrl) {
+  if (env.SONG_NOTIFY === "off") return;
+  if (!env.RESEND_API_KEY || !env.BOOKING_TO || !env.BOOKING_FROM) { console.error("Song email: RESEND_API_KEY, BOOKING_TO or BOOKING_FROM is missing"); return; }
+  ctx.waitUntil(songEmail(env, s, siteUrl));
 }
 
 async function readJson(request) {
@@ -364,6 +374,16 @@ export async function handleSongs(request, env, ctx) {
       return new Response("﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n"), { headers: {
         "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store",
         "Content-Disposition": `attachment; filename="audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv"` } });
+    }
+
+    // POST /api/songs/test-email  (band only): sends one test "new song" email and returns Resend's answer
+    if (parts.length === 3 && parts[2] === "test-email" && method === "POST") {
+      if (!isAdmin(request, env)) return json({ ok: false, error: "Not allowed" }, 403);
+      const missing = ["RESEND_API_KEY", "BOOKING_TO", "BOOKING_FROM"].filter((k) => !env[k]);
+      if (missing.length) return json({ ok: false, error: `Missing setting(s): ${missing.join(", ")}` }, 500);
+      const r = await songEmail(env, { song: "TEST - please ignore", artist: "AudioVox website", year: "", url: "" }, url.origin);
+      return json({ ok: r.ok, resendStatus: r.status, resendReply: r.body, songNotify: env.SONG_NOTIFY || "(not set = on)",
+        error: r.ok ? undefined : `Resend refused it (${r.status}): ${r.body}` }, r.ok ? 200 : 502);
     }
 
     // GET /api/songs/challenge

@@ -556,7 +556,17 @@
       const blob = await res.blob(); const link = document.createElement("a");
       link.href = URL.createObjectURL(blob); link.download = `audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
     });
+    const t = el("a", "sr-admin", "Send a test email"); t.href = "#"; t.style.marginLeft = "18px";
+    t.addEventListener("click", async (e) => {
+      e.preventDefault(); t.textContent = "Sending…";
+      try {
+        const res = await fetch("/api/songs/test-email", { method: "POST", headers: { Authorization: "Bearer " + adminToken } });
+        const d = await res.json().catch(() => ({}));
+        alert(d.ok ? `Test email sent (Resend answered ${d.resendStatus}). Check your inbox and spam folder.` : (d.error || `Failed (${res.status}).`));
+      } finally { t.textContent = "Send a test email"; }
+    });
     $("sr-rest").after(a);
+    a.after(t);
   }
 
   loadList();
