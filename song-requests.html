@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Permanent+Marker&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=50">
+<link rel="stylesheet" href="css/style.css?v=51">
 <style>
   .sr-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 24px;max-width:1280px;margin:0 auto;}
   .sr-top .brand{font-size:1.6rem;letter-spacing:.06em;}
@@ -20,9 +20,7 @@
   .sr-intro{text-align:left;margin:8px 0 34px;}
   .sr-intro .eyebrow{margin:0 0 8px;}
   .sr-intro .section-title{font-size:clamp(2.2rem,5vw,3.4rem);line-height:1.05;margin:0 0 .4em;}
-  .sr-intro .lede{font-size:1.15rem;max-width:640px;margin:0;}
-
-  h2.sr-h{margin:0 0 4px;font-size:1.9rem;color:var(--cream);}
+  .sr-intro .lede{font-size:1.15rem;max-width:640px;margin:0;}  h2.sr-h{margin:0 0 4px;font-size:1.9rem;color:var(--cream);}
   .sr-sub{color:var(--grey);margin:0 0 16px;font-size:.98rem;}
 
   /* ---- side by side: the list (left) and the search (right) ---- */
@@ -40,6 +38,15 @@
   .sg-search input{width:100%;font-size:1.05rem;padding:13px 14px 13px 42px;font-family:var(--font-body);background:var(--black-3);border:1px solid var(--grey-dim);color:var(--cream);border-radius:2px;}
   .sg-search input:focus{outline:none;border-color:var(--red);}
   .sg-search input::placeholder{color:var(--grey-dim);}
+  /* our own clear (X) button, the same on every browser; the browser's built-in one is hidden */
+  .sg-search input{padding-right:42px;}
+  .sg-search input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none;}
+  .sg-clear{position:absolute;right:8px;top:50%;width:28px;height:28px;margin-top:-14px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--grey);cursor:pointer;}
+  .sg-clear[hidden]{display:none;}
+  .sg-clear:hover{background:var(--black-2);color:var(--cream);}
+  .sg-clear::before,.sg-clear::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:2px;border-radius:1px;background:currentColor;}
+  .sg-clear::before{transform:translate(-50%,-50%) rotate(45deg);}
+  .sg-clear::after{transform:translate(-50%,-50%) rotate(-45deg);}
   .sg-search::before{content:"";position:absolute;left:14px;top:50%;width:13px;height:13px;margin-top:-8px;border:2px solid var(--grey);border-radius:50%;}
   .sg-search::after{content:"";position:absolute;left:26px;top:50%;width:7px;height:2px;margin-top:6px;background:var(--grey);transform:rotate(45deg);}
   .sg-rules{color:var(--grey-dim);font-size:.82rem;margin:9px 2px 0;}
@@ -58,14 +65,39 @@
   .sg-add:hover{background:var(--red-2);border-color:var(--red-2);}
   .sg-res.is-known{cursor:default;opacity:.85;}
   .sg-known{display:inline-block;margin-top:5px;padding:2px 9px;border:1px solid var(--red);border-radius:99px;color:var(--red-glow);font-family:var(--font-display);font-size:.85rem;letter-spacing:.06em;line-height:1.2;text-transform:uppercase;}
-  .qc{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--grey-dim);border-radius:6px;}
+  /* ---- Spotify ---- */
+  /* the Spotify credit sits on the same line as "The most-voted songs...", in the same text style, right-aligned */
+  .sl-subrow{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 20px;margin:0 0 16px;}
+  .sl-subrow .sr-sub{margin:0;}
+  .sp-credit{color:var(--grey);font-size:.98rem;text-align:right;}
+  .sp-credit a,.sp-link{color:#1ed760;}
+  .sp-link{display:inline-block;margin-top:3px;font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;}
+  .sp-clickable{cursor:pointer;}
+  /* TEST: Spotify's player is invisible. It's pinned to the bottom-left corner of the screen (fully
+     transparent, not clickable) so it never scrolls off screen: phone browsers pause off-screen embeds, which
+     stopped songs switching while you were scrolled down the list. The page's play buttons control it. */
+  .sp-bar{position:fixed;left:0;bottom:0;width:300px;height:80px;opacity:0;pointer-events:none;z-index:-1;}
+  #sp-embed,.sp-bar iframe{width:300px;height:80px;border:0;display:block;}
+  .sp-close{position:absolute;top:-12px;right:-12px;width:28px;height:28px;border-radius:50%;background:var(--black-2);border:1px solid rgba(255,255,255,.3);cursor:pointer;padding:0;}
+  .sp-close::before,.sp-close::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:2px;background:var(--cream);}
+  .sp-close::before{transform:translate(-50%,-50%) rotate(45deg);}
+  .sp-close::after{transform:translate(-50%,-50%) rotate(-45deg);}
+  /* Quick check: an overlay across the whole Find A Song panel, shown only when someone taps + Add */
+  .sg{position:relative;}
+  .qc{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    padding:24px;text-align:center;border-radius:8px;background:rgba(21,19,22,.97);border:1px solid var(--red);
+    box-shadow:0 0 0 1px rgba(224,17,40,.25),0 0 30px rgba(224,17,40,.18);}
   .qc[hidden]{display:none;}
-  .qc.is-flash{border-color:var(--red);box-shadow:0 0 0 2px rgba(224,17,40,.35);}
-  .qc label{color:var(--cream);font-size:.92rem;flex:1 1 100%;}
-  .qc input{width:80px;padding:8px 10px;font-size:1rem;font-family:var(--font-body);background:var(--black-3);border:1px solid var(--grey-dim);color:var(--cream);border-radius:2px;}
+  .qc .eyebrow{margin:0;}
+  .qc-title{margin:0;font-family:var(--font-display);font-size:1.7rem;letter-spacing:.03em;color:var(--cream);line-height:1.1;}
+  .qc-song{color:var(--red-glow);}
+  .qc-sum{display:flex;align-items:center;justify-content:center;gap:10px;white-space:nowrap;}
+  .qc-eq{font-family:var(--font-display);font-size:2.4rem;color:var(--cream);letter-spacing:.04em;line-height:1;white-space:nowrap;}
+  .qc input{width:84px;padding:10px 12px;font-size:1.4rem;text-align:center;font-family:var(--font-display);background:var(--black-3);border:1px solid var(--grey-dim);color:var(--cream);border-radius:2px;}
   .qc input:focus{outline:none;border-color:var(--red);}
-  .qc button{padding:8px 16px;font-size:.9rem;}
-
+  .qc-msg{margin:0;min-height:1.2em;color:var(--red-glow);font-size:.9rem;}
+  .qc-cancel{background:none;border:0;color:var(--grey);font:inherit;font-size:.85rem;text-decoration:underline;cursor:pointer;padding:0;}
+  .qc-cancel:hover{color:var(--cream);}
   /* ---- top 10 cards ---- */
   .sl-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
   .sl-hint{color:var(--grey);font-size:.88rem;}
@@ -103,7 +135,7 @@
   .sl-count small{display:block;font-family:var(--font-body);font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);}
   .sl-btn{border:2px solid var(--red);background:var(--red);color:#fff;font-family:var(--font-display);font-size:.95rem;letter-spacing:.06em;padding:4px 11px;border-radius:4px;cursor:pointer;transition:all .2s ease;}
   .sl-btn:hover{background:var(--red-2);border-color:var(--red-2);}
-  .sl-btn.is-voted{background:transparent;color:var(--red-glow);cursor:default;}
+  .sl-btn.is-voted{background:transparent;color:var(--red-glow);cursor:pointer;}
 
   /* ---- everything below the top 10 ---- */
   .sr-rest{margin-top:34px;}
@@ -139,10 +171,12 @@
   @media (max-width:620px){#sl-grid{grid-template-columns:repeat(3,1fr);}}
   @media (max-width:520px){#sl-grid{grid-template-columns:repeat(2,1fr);gap:10px}.sl-song{font-size:1.1rem}.sl-btn{padding:5px 10px}}
   .sg-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;}
+  .sl-empty{color:var(--grey);padding:14px 2px;}
   .sl-del{flex:none;background:none;border:0;color:var(--grey-dim);font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:4px;}
   .sl-del:hover{color:var(--red-glow);}
   .sl-card .sl-del{position:absolute;left:8px;bottom:8px;z-index:3;background:rgba(10,10,11,.8);border-radius:4px;}
-  .sl-empty{color:var(--grey);padding:14px 2px;}
+  .sr-admin{display:inline-block;margin-top:24px;color:var(--grey);font-size:.85rem;text-decoration:underline;}
+  .sr-admin:hover{color:var(--cream);}
 </style>
 </head>
 <body>
@@ -156,16 +190,19 @@
 
 <main class="sr-wrap">
   <header class="sr-intro">
-    <p class="eyebrow">Fan Requests</p>
-    <h1 class="section-title">Songs We Should Learn</h1>
-    <p class="lede">Got a song stuck in your head since &rsquo;95? Vote it up, or add it to the list.</p>
+    <div class="sr-intro-text">
+      <p class="eyebrow">Fan Requests</p>
+      <h1 class="section-title">Songs We Should Learn</h1>
+      <p class="lede">Got a song stuck in your head since &rsquo;95? Vote it up, or add it to the list.</p>
+    </div>
+    <div id="sp-bar" class="sp-bar" aria-hidden="true"><div id="sp-embed"></div></div>
   </header>
 
   <div class="sr-layout">
+    <!-- LEFT: the top 10, then everyone else below -->
     <section id="list-col" class="sr-list-col">
       <div class="sl-head"><h2 class="sr-h">The Top 10</h2><span class="sl-hint" id="sl-hint"></span></div>
-      <p class="sr-sub">The most-voted songs. Tap play for a 30-second clip, then vote.</p>
-      <div id="drop-hint">Drop the song here to add it to the list</div>
+      <div class="sl-subrow"><p class="sr-sub">The most-voted songs. Tap play for a preview, then vote.</p><span class="sp-credit">Song info, artwork and previews from <a href="https://www.spotify.com" target="_blank" rel="noopener">Spotify</a></span></div>
       <div id="sl-grid"><p class="sl-empty">Loading the list&hellip;</p></div>
 
       <div class="sr-rest" id="sr-rest" hidden>
@@ -176,41 +213,54 @@
       </div>
     </section>
 
+    <!-- RIGHT: search (stays in view while you scroll the list) -->
     <aside class="sr-search-col">
       <div class="sg">
         <h2 class="sr-h">Find A Song</h2>
-        <p class="sr-sub" style="margin-bottom:12px">Search, then <b>drag it onto the list</b> or tap <b>+ Add</b>.</p>
-        <div class="sg-search"><input id="sg-q" type="search" placeholder="Search a song or a band&hellip;" autocomplete="off" aria-label="Search for a song"></div>
+        <p class="sr-sub" style="margin-bottom:12px">Search, then tap <b>+ Add</b>.</p>
+        <div class="sg-search"><input id="sg-q" type="search" placeholder="Search a song or a band&hellip;" autocomplete="off" aria-label="Search for a song"><button type="button" id="sg-clear" class="sg-clear" aria-label="Clear the search" hidden></button></div>
         <label class="sg-hp" aria-hidden="true">Leave this blank <input id="sg-hp" type="text" tabindex="-1" autocomplete="off"></label>
         <p class="sg-rules">Songs from 1989 on.</p>
         <p id="sg-status" class="sg-status" role="status"></p>
-        <ul id="sg-results" class="sg-results"></ul>
-        <div id="qc" class="qc" hidden>
-          <label for="qc-input" id="qc-label">Quick check to add songs</label>
-          <input id="qc-input" inputmode="numeric" autocomplete="off">
-          <button type="button" id="qc-go" class="btn btn-outline">Unlock</button>
+        <div id="qc" class="qc" role="dialog" aria-modal="false" aria-labelledby="qc-title" hidden>
+          <p class="eyebrow">One quick check</p>
+          <p class="qc-title" id="qc-title">Complete this to add <span class="qc-song" id="qc-song">your song</span></p>
+          <div class="qc-sum"><label class="qc-eq" for="qc-input" id="qc-eq">0 + 0 =</label><input id="qc-input" inputmode="numeric" autocomplete="off" aria-label="Your answer"></div>
+          <p class="qc-msg" id="qc-msg" role="status"></p>
+          <button type="button" id="qc-go" class="btn btn-primary">Add Song</button>
+          <button type="button" id="qc-cancel" class="qc-cancel">Never mind</button>
         </div>
+        <ul id="sg-results" class="sg-results"></ul>
       </div>
     </aside>
   </div>
 </main>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
-  // Everything is checked again on the server (worker/songs.js); this page just shows the list and sends requests.
-  const TOP = 10;
-  const REST_STEP = 20;
+  // The list, votes and every rule live on the server (worker/songs.js). This page shows the list, searches
+  // Spotify through the server, and sends votes/additions. Rules are repeated here only to give instant feedback.
+  const MIN_YEAR = 1989, MAX_YEAR = new Date().getFullYear();
+  const TOP = 10;            // the big cards
+  const REST_STEP = 20;      // how many of the rest show before "Show more"
 
   const $ = (id) => document.getElementById(id);
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  const big = (u) => (u || "").replace(/\/\d+x\d+bb\.(jpg|png)$/, "/400x400bb.$1");
-  const small = (u) => (u || "").replace(/\/\d+x\d+bb\.(jpg|png)$/, "/120x120bb.$1");
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const titleKey = (song) => norm(String(song).replace(/[\(\[].*?[\)\]]/g, ""));
+  const artistKey = (a) => norm(String(a).replace(/^the\s+/i, ""));
+  const keyOf = (song, artist) => `${titleKey(song)}|${artistKey(artist)}`;
   const store = { get(k) { try { return sessionStorage.getItem(k) || ""; } catch { return ""; } }, set(k, v) { try { sessionStorage.setItem(k, v); } catch {} } };
+
   let toastTimer;
   function toast(t) { const n = $("toast"); n.textContent = t; n.classList.add("is-on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => n.classList.remove("is-on"), 3800); }
+  const statusEl = $("sg-status");
+  // Messages show under the search box AND pop up, so a refused add is never missed.
+  function say(t, ok) { statusEl.textContent = t || ""; statusEl.classList.toggle("is-ok", !!ok); if (t && !/^Searching/.test(t)) toast(t); }
 
-  // Band only: open the page once with #admin=YOUR_ADMIN_TOKEN to show Remove buttons on this device.
+  // Band only: open the page once with #admin=YOUR_ADMIN_TOKEN to show Remove buttons and the export link.
   let adminToken = "";
   try {
     const m = location.hash.match(/admin=([^&]+)/);
@@ -225,20 +275,14 @@
     return data;
   }
 
-  // ---------- searching Apple's catalog ----------
-  // The search runs here in the visitor's browser: Apple rate-limits requests that come from Cloudflare's servers.
-  // Apple blocks normal cross-site requests from web pages but offers a "callback" (JSONP) option, used here.
-  // The same rules are checked again on the server when a song is added.
-  const MIN_YEAR = 1989, MAX_YEAR = new Date().getFullYear();
+  // ---------- rules (checked again on the server) ----------
   const BLOCKED_TITLE_WORDS = ["fuck", "fucking", "fucked", "fucker", "fuckin", "motherfucker", "shit", "shitty", "shithead", "bullshit", "horseshit", "dipshit",
     "bitch", "bitches", "cunt", "cock", "cocksucker", "dick", "dickhead", "pussy", "whore", "slut", "bastard", "asshole", "tits", "cum", "wank",
     "nigger", "nigga", "faggot", "fag", "retard"];
   const blockedTitleRx = new RegExp("(?:^|[^a-z])(?:" + BLOCKED_TITLE_WORDS.join("|") + ")(?:$|[^a-z])", "i");
-  const norm = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
-  const titleKey = (song) => norm(String(song).replace(/[\(\[].*?[\)\]]/g, ""));
-  const artistKey = (a) => norm(String(a).replace(/^the\s+/i, ""));
-  const songKey = (song, artist) => `${titleKey(song)}|${artistKey(artist)}`;
-  const allowed = (it) => it.trackId && it.song && it.artist && it.year >= MIN_YEAR && it.year <= MAX_YEAR && !blockedTitleRx.test(it.song.normalize("NFKD").replace(/[\u0300-\u036f]/g, ""));
+  const explicitTitle = (song) => blockedTitleRx.test(String(song).normalize("NFKD").replace(/[̀-ͯ]/g, ""));
+  const inYearRange = (it) => it.year >= MIN_YEAR && it.year <= MAX_YEAR;
+  const allowed = (it) => !!(it.id && it.song && it.artist) && inYearRange(it) && !explicitTitle(it.song);
   let knownByTitle = new Set(), knownStrict = [];
   function setKnown(list) {
     knownByTitle = new Set(list.filter((k) => !k[2]).map((k) => titleKey(k[0])));
@@ -246,76 +290,72 @@
   }
   const isKnown = (it) => { const t = titleKey(it.song); return knownByTitle.has(t) || knownStrict.some((k) => k.title === t && norm(it.artist).includes(k.artist)); };
 
-  // When Apple has the same song on several albums, show the original album (and its cover).
-  // 1) Compilations, live albums, soundtracks, covers and karaoke are only used if nothing else exists.
-  // 2) Of the rest, the album the song appears on most often wins (originals get the most reissues:
-  //    "Superunknown" shows up 5 times for "Black Hole Sun", the "Telephantasm" best-of only 3).
-  // 3) Then the plain album beats a remaster/deluxe/anniversary edition, then the earliest date, then Apple's order.
+  // When Spotify has the same song on several albums, show the original album (and its cover):
+  // compilations/covers only if nothing else; studio beats live/acoustic/demo; then the earliest release.
   function editionPenalty(it) {
     const a = String(it.album || "").toLowerCase();
     if (/karaoke|tribute|lullaby|rockabye|in the style of|originally performed|backing track|made famous/.test(a)) return 3;
-    if (it.albumArtist && norm(it.albumArtist) !== norm(it.artist)) return 2;   // someone else's album (a compilation)
+    if (it.albumArtist && norm(it.albumArtist) !== norm(it.artist)) return 2;
     if (/greatest|hits|best of|collection|anthology|essential|compilation|\blive\b|soundtrack|now that|sampler|number 1|#1|\ba-sides\b|\bb-sides\b|singles|rarities|retrospective/.test(a)) return 2;
     if (/remaster|deluxe|anniversary|edition|expanded|bonus|reissue|- single|- ep|version|sped.?up|slowed/.test(a)) return 1;
+    if (it.albumType === "compilation") return 1;
     return 0;
   }
-  // The studio version beats "(Acoustic Version)", "(Live ...)", "(Demo)", "(Remix)"... and "(2019 Remaster)" titles.
-  // Only the bracketed / after-a-dash part of the title is checked, so songs like "Live Forever" aren't affected.
-  function trackPenalty(song) {
-    const extra = (String(song).match(/[\(\[].*?[\)\]]|\s-\s.*$/g) || []).join(" ");
-    if (/\b(live|acoustic|demo|remix|instrumental|karaoke|unplugged|session|rehearsal|mix|edit|version|take)\b/i.test(extra)) return 2;
-    if (/remaster/i.test(extra)) return 1;
-    return 0;
+  function trackPenalty(it) {
+    const extra = (String(it.fullTitle || it.song).match(/[\(\[].*?[\)\]]|\s-\s.*$/g) || []).join(" ");
+    return /\b(live|acoustic|demo|remix|instrumental|karaoke|unplugged|session|rehearsal|mix|edit|version|take)\b/i.test(extra) ? 2 : 0;
   }
-  const baseAlbum = (a) => norm(String(a || "").replace(/[\(\[].*?[\)\]]/g, "").replace(/\s+-\s+(single|ep)\s*$/i, ""));
   function chooseVersion(list) {
-    const scored = list.map((it, i) => ({ it, i, p: editionPenalty(it), t: trackPenalty(it.song), base: baseAlbum(it.album), d: String(it.date || "9999").slice(0, 10) }));
+    const scored = list.map((it, i) => ({ it, i, p: editionPenalty(it), t: trackPenalty(it), d: String(it.date || "9999").slice(0, 10) }));
     const pool = scored.some((s) => s.p < 2) ? scored.filter((s) => s.p < 2) : scored;
-    const count = new Map();
-    pool.forEach((s) => count.set(s.base, (count.get(s.base) || 0) + 1));
-    pool.sort((a, b) => (a.t - b.t) || (count.get(b.base) - count.get(a.base)) || (a.p - b.p) || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || (a.i - b.i));
+    pool.sort((a, b) => (a.t - b.t) || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || (a.p - b.p) || (a.i - b.i));
     return pool[0].it;
   }
-  function pickOriginals(items, keyFn) {
+  function pickOriginals(items) {
     const groups = new Map();
-    for (const it of items) { const k = keyFn(it); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
-    return [...groups.values()].map(chooseVersion);    // in the order Apple first listed each song
+    for (const it of items) { const k = keyOf(it.song, it.artist); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+    return [...groups.values()].map(chooseVersion);
   }
-  const searchCache = new Map();
-  function itunes(term) {
-    const key = term.toLowerCase();
-    if (searchCache.has(key)) return Promise.resolve(searchCache.get(key));
-    return new Promise((resolve, reject) => {
-      const cb = "avItunes" + Math.random().toString(36).slice(2);
-      const s = document.createElement("script");
-      const done = () => { delete window[cb]; s.remove(); clearTimeout(timer); };
-      const timer = setTimeout(() => { done(); reject(new Error("timeout")); }, 9000);
-      window[cb] = (json) => {
-        done();
-        const items = (json.results || []).map((r) => ({ trackId: r.trackId, song: r.trackName || "", artist: r.artistName || "",
-          year: Number(String(r.releaseDate || "").slice(0, 4)) || 0, art: r.artworkUrl100 || "", preview: r.previewUrl || "", album: r.collectionName || "", albumArtist: r.collectionArtistName || "", date: r.releaseDate || "" }));
-        searchCache.set(key, items); resolve(items);
-      };
-      s.onerror = () => { done(); reject(new Error("search failed")); };
-      s.src = "https://itunes.apple.com/search?" + new URLSearchParams({ term, media: "music", entity: "song", limit: 25, country: "US", callback: cb });
-      document.head.appendChild(s);
+
+  // ---------- previews: Spotify's player (invisible, controlled by the play buttons) ----------
+  // The player is pinned to a corner of the screen, fully transparent, so phone browsers never pause it for being
+  // off screen. "theme: dark" isn't in Spotify's docs but gives the plain dark player.
+  let controller = null, currentId = "", paused = true, pendingId = "", spotifyApi = null;
+  function syncButtons() { document.querySelectorAll(".sl-play[data-sp]").forEach((b) => b.classList.toggle("is-playing", b.dataset.sp === currentId && !paused)); }
+  function createPlayer() {
+    if (!spotifyApi || controller || $("sp-embed").dataset.started) return;
+    const first = songs.find((s) => s.sp);
+    if (!first) return;
+    $("sp-embed").dataset.started = "1";
+    currentId = first.sp;
+    spotifyApi.createController($("sp-embed"), { uri: `spotify:track:${first.sp}`, width: "100%", height: 80, theme: "dark" }, (c) => {
+      c.addListener("ready", () => { controller = c; if (pendingId) { const id = pendingId; pendingId = ""; playTrack(id); } });
+      c.addListener("playback_update", (e) => { paused = !!(e.data && e.data.isPaused); syncButtons(); });
     });
   }
-  // ---------- one shared audio player ----------
-  const audio = new Audio();
-  let playingBtn = null;
-  function stopAudio() { audio.pause(); if (playingBtn) { playingBtn.classList.remove("is-playing"); playingBtn = null; } }
-  audio.addEventListener("ended", stopAudio);
-  function playButton(url) {
-    const b = el("button", "sl-play"); b.type = "button"; b.setAttribute("aria-label", "Play a 30-second preview");
-    b.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (playingBtn === b) { stopAudio(); return; }
-      stopAudio(); audio.src = url; audio.play().catch(() => {}); playingBtn = b; b.classList.add("is-playing");
-    });
+  window.onSpotifyIframeApiReady = (api) => { spotifyApi = api; createPlayer(); };
+  function playTrack(id) {
+    if (!id) return;
+    if (!controller) { pendingId = id; return; }
+    if (id === currentId) { if (paused) controller.resume(); else controller.pause(); return; }
+    currentId = id; paused = true; syncButtons();
+    controller.loadEntity(`spotify:track:${id}`);
+    controller.play();
+  }
+  function playButton(id) {
+    const b = el("button", "sl-play"); b.type = "button"; b.setAttribute("aria-label", "Play a preview");
+    if (!id) { b.hidden = true; return b; }
+    b.dataset.sp = id;
+    if (id === currentId && !paused) b.classList.add("is-playing");
+    b.addEventListener("click", (e) => { e.stopPropagation(); playTrack(id); });
     return b;
   }
-  document.addEventListener("visibilitychange", () => { if (document.hidden) stopAudio(); });
+  // Clicking a song (anywhere except its buttons) opens it on Spotify: the "link back" Spotify's policy asks for.
+  function linkToSpotify(node, url) {
+    if (!url) return;
+    node.classList.add("sp-clickable"); node.title = "Open on Spotify";
+    node.addEventListener("click", (e) => { if (e.target.closest("button, a, input")) return; window.open(url, "_blank", "noopener"); });
+  }
 
   // ---------- the list ----------
   let songs = [];
@@ -323,14 +363,14 @@
   let restShown = REST_STEP;
   const grid = $("sl-grid"), rowsEl = $("sl-rows"), moreBtn = $("sl-more");
 
-  function voteButton(s, onCount) {
-    const btn = el("button", "sl-btn", s.voted ? "Voted \u2713" : "Vote"); btn.type = "button";
-    if (s.voted) btn.classList.add("is-voted");
+  function voteButton(s, onChange) {
+    const btn = el("button", "sl-btn", s.voted ? "Voted ✓" : "Vote"); btn.type = "button";
+    if (s.voted) { btn.classList.add("is-voted"); btn.title = "Click to take your vote back"; }
     btn.addEventListener("click", async () => {
-      if (s.voted || btn.disabled) return;
+      if (btn.disabled) return;
       btn.disabled = true;
-      try { const data = await api(`/api/songs/${s.id}/vote`, { method: "POST" }); setSongs(data.songs); }
-      catch (err) { btn.disabled = false; toast(err.message); }
+      try { setSongs((await api(`/api/songs/${s.id}/vote`, { method: s.voted ? "DELETE" : "POST" })).songs); }   // clicking "Voted" takes it back
+      catch (err) { btn.disabled = false; say(err.message); }
     });
     return btn;
   }
@@ -338,9 +378,9 @@
     const b = el("button", "sl-del", "Remove"); b.type = "button";
     b.addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (!confirm(`Remove "${s.song}" from the list?`)) return;
-      try { const data = await api(`/api/songs/${s.id}`, { method: "DELETE", headers: { Authorization: "Bearer " + adminToken } }); setSongs(data.songs); }
-      catch (err) { toast(err.status === 403 ? "That admin key wasn\u2019t accepted." : err.message); }
+      if (!confirm(`Remove "${s.song}" from the list? Its votes are removed too.`)) return;
+      try { setSongs((await api(`/api/songs/${s.id}`, { method: "DELETE", headers: { Authorization: "Bearer " + adminToken } })).songs); }
+      catch (err) { say(err.status === 403 ? "That admin key wasn’t accepted." : err.message); }
     });
     return b;
   }
@@ -354,32 +394,33 @@
     const art = el("div", "sl-art");
     art.append(el("div", "ph", s.song.charAt(0)), el("span", "sl-rank", String(rank)));
     const tag = tagFor(s); if (tag) art.append(tag);
-    if (s.preview) art.append(playButton(s.preview));
+    art.append(playButton(s.sp));
     if (adminToken) art.append(removeButton(s));
-    if (s.art) { const img = new Image(); img.alt = `${s.song} album art`; img.referrerPolicy = "no-referrer"; img.src = big(s.art); img.onload = () => { const ph = art.querySelector(".ph"); if (ph) ph.remove(); art.prepend(img); }; }
+    if (s.art) { const img = new Image(); img.alt = `${s.song} album art`; img.referrerPolicy = "no-referrer"; img.src = s.art; img.onload = () => { const ph = art.querySelector(".ph"); if (ph) ph.remove(); art.prepend(img); }; }
     const body = el("div", "sl-body");
-    body.append(el("div", "sl-song", s.song), el("div", "sl-artist", s.year ? `${s.artist} \u00B7 ${s.year}` : s.artist));
+    body.append(el("div", "sl-song", s.song), el("div", "sl-artist", s.year ? `${s.artist} · ${s.year}` : s.artist));
     const count = el("div", "sl-count"); count.append(el("span", "", String(s.votes)), el("small", "", s.votes === 1 ? "vote" : "votes"));
     const row = el("div", "sl-vote"); row.append(count, voteButton(s));
     body.append(row);
     card.append(art, body);
+    linkToSpotify(card, s.url);
     return card;
   }
   function rowEl(s, pos) {
     const li = el("li", "sl-row"); li.dataset.id = s.id;
     li.append(el("div", "pos", String(pos)));
-    if (s.art) { const img = new Image(); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = small(s.art); li.append(img); } else li.append(el("div", "ph"));
+    if (s.art) { const img = new Image(); img.alt = ""; img.referrerPolicy = "no-referrer"; img.src = s.art; li.append(img); } else li.append(el("div", "ph"));
     const t = el("div", "t"); const b = el("b", "", s.song);
     const tag = tagFor(s); if (tag) b.append(" ", tag);
-    t.append(b, el("span", "a", s.year ? `${s.artist} \u00B7 ${s.year}` : s.artist));
+    t.append(b, el("span", "a", s.year ? `${s.artist} · ${s.year}` : s.artist));
     li.append(t);
-    if (s.preview) li.append(playButton(s.preview));
+    if (s.sp) li.append(playButton(s.sp));
     if (adminToken) li.append(removeButton(s));
     li.append(el("div", "v", String(s.votes)), voteButton(s));
+    linkToSpotify(li, s.url);
     return li;
   }
   function render() {
-    stopAudio();
     if (!songs.length) { grid.replaceChildren(el("p", "sl-empty", "No songs yet. Be the first to add one!")); $("sr-rest").hidden = true; $("sl-hint").textContent = ""; return; }
     grid.replaceChildren(...songs.slice(0, TOP).map((s, i) => cardEl(s, i + 1)));
     const rest = songs.slice(TOP);
@@ -390,7 +431,7 @@
     moreBtn.textContent = `Show ${hidden} more song${hidden === 1 ? "" : "s"}`;
     $("sl-hint").textContent = `${songs.length} song${songs.length === 1 ? "" : "s"} in all`;
   }
-  function setSongs(list) { songs = list; render(); }
+  function setSongs(list) { songs = list; render(); createPlayer(); }
   moreBtn.addEventListener("click", () => { restShown += REST_STEP; render(); });
   function pulse(id) {
     let node = document.querySelector(`[data-id="${id}"]`);
@@ -398,114 +439,129 @@
     if (!node) return;
     node.scrollIntoView({ behavior: "smooth", block: "center" }); node.classList.remove("is-pulse"); void node.offsetWidth; node.classList.add("is-pulse");
   }
+  let refills = 0;
   async function loadList() {
-    try { const data = await api("/api/songs"); setKnown(data.known || []); setSongs(data.songs); }
-    catch { grid.replaceChildren(el("p", "sl-empty", "Couldn\u2019t load the list right now. Please try again in a moment.")); }
+    try {
+      const data = await api("/api/songs");
+      setKnown(data.known || []); setSongs(data.songs);
+      // songs still waiting for their Spotify artwork are filled in by the server in the background: check back
+      if (data.songs.some((s) => !s.sp) && refills++ < 4) setTimeout(loadList, 3000);
+    } catch { grid.replaceChildren(el("p", "sl-empty", "Couldn’t load the list right now. Please try again in a moment.")); }
   }
 
-  // ---------- quick check (asked once per visit, checked on the server) ----------
-  const statusEl = $("sg-status");
-  function say(t, ok) { statusEl.textContent = t || ""; statusEl.classList.toggle("is-ok", !!ok); }
+  // ---------- quick check: an overlay on the search panel, the first time someone adds a song ----------
   let unlockToken = store.get("avSongUnlock");
-  let challengeId = "";
-  let pending = null;   // the song someone tried to add before answering the question
-  async function askQuestion() {
-    const qc = $("qc"); qc.hidden = false; $("qc-input").value = "";
-    try { const c = await api("/api/songs/challenge"); challengeId = c.id; $("qc-label").textContent = `To add songs, answer a quick check: what\u2019s ${c.question}?`; }
-    catch (err) { $("qc-label").textContent = err.message; }
-    qc.classList.add("is-flash"); setTimeout(() => qc.classList.remove("is-flash"), 1500);
-    $("qc-input").focus();
+  let challengeId = "", pendingSong = null;
+  async function newQuestion() {
+    $("qc-input").value = "";
+    try { const c = await api("/api/songs/challenge"); challengeId = c.id; $("qc-eq").textContent = `${c.question} =`; }
+    catch (err) { $("qc-msg").textContent = err.message; }
   }
+  async function openCheck(it) {
+    pendingSong = it;
+    $("qc-song").textContent = `“${it.song}”`; $("qc-msg").textContent = "";
+    const qc = $("qc"); qc.hidden = false;
+    qc.closest(".sg").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    await newQuestion();
+    $("qc-input").focus({ preventScroll: true });
+  }
+  function closeCheck() { pendingSong = null; $("qc-msg").textContent = ""; $("qc").hidden = true; }
   async function tryUnlock() {
+    const go = $("qc-go"); if (go.disabled) return;
+    go.disabled = true;
     try {
       const data = await api("/api/songs/unlock", { method: "POST", body: JSON.stringify({ challengeId, answer: $("qc-input").value }) });
       unlockToken = data.unlock; store.set("avSongUnlock", unlockToken);
-      $("qc").hidden = true; say("Thanks! Now you can add songs.", true);
-      if (pending) { const p = pending; pending = null; addSong(p); }
-    } catch (err) { say(err.message); askQuestion(); }
+      const it = pendingSong; closeCheck();
+      if (it) addSong(it);                                   // add the song they picked, no second tap needed
+    } catch (err) {
+      $("qc-msg").textContent = err.code === "challenge" ? err.message : err.message;
+      await newQuestion(); $("qc-input").focus();
+    } finally { go.disabled = false; }
   }
   $("qc-go").addEventListener("click", tryUnlock);
+  $("qc-cancel").addEventListener("click", closeCheck);
+  $("qc").addEventListener("keydown", (e) => { if (e.key === "Escape") closeCheck(); });
   $("qc-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); tryUnlock(); } });
 
   // ---------- adding a song ----------
   async function addSong(it) {
-    if (it.known) { say(`We already play \u201C${it.song}\u201D! Come catch it at a show.`); return; }
-    if (!unlockToken) { pending = it; say("Answer the quick check first, then we\u2019ll add your song."); askQuestion(); return; }
-    say("Adding\u2026");
+    if (!inYearRange(it)) { say(`We only add songs from ${MIN_YEAR} on.`); return; }
+    if (explicitTitle(it.song)) { say("Sorry, we can’t add that one to the list."); return; }
+    if (isKnown(it)) { say(`We already play “${it.song}”! Come catch it at a show.`); return; }
+    if (!unlockToken) { openCheck(it); return; }
+    say("Adding…");
     try {
-      const data = await api("/api/songs", { method: "POST", body: JSON.stringify({ trackId: it.trackId, song: it.song, artist: it.artist, year: it.year, art: it.art, preview: it.preview, unlock: unlockToken, website: $("sg-hp").value }) });
+      const data = await api("/api/songs", { method: "POST", body: JSON.stringify({ sp: it.id, unlock: unlockToken, website: $("sg-hp").value }) });
       if (!data.merged) freshIds.add(data.id);
       setSongs(data.songs);
       if (data.id) pulse(data.id);
-      if (data.merged) say(data.counted ? "That one\u2019s already on the list \u2014 we added your vote!" : "That one\u2019s already on the list, and you\u2019ve already voted for it.", data.counted);
-      else { say(""); toast(`Added \u201C${it.song}\u201D to the list!`); }
+      statusEl.textContent = "";
+      if (data.merged) toast(data.counted ? "That one’s already on the list — we added your vote!" : "That one’s already on the list, and you’ve already voted for it.");
+      else toast(`Added “${it.song}” to the list!`);
     } catch (err) {
-      if (err.code === "locked") { unlockToken = ""; store.set("avSongUnlock", ""); pending = it; say(err.message); askQuestion(); return; }
+      if (err.code === "locked") { unlockToken = ""; store.set("avSongUnlock", ""); statusEl.textContent = ""; openCheck(it); return; }
       say(err.message);
     }
   }
 
   // ---------- search ----------
-  const q = $("sg-q"), resultsEl = $("sg-results");
+  const q = $("sg-q"), resultsEl = $("sg-results"), clearBtn = $("sg-clear");
+  const searchCache = new Map();
   let timer = null, seq = 0;
-  function showResults(items) {
+  function showResults(raw) {
     resultsEl.replaceChildren();
-    if (!items.length) { say("No matches from 1989 on. Try a different spelling."); return; }
-    say("");
+    const listed = new Map(songs.map((s) => [keyOf(s.song, s.artist), s.id]));
+    const items = pickOriginals(raw.filter(allowed)).slice(0, 8);
+    if (!items.length) { say(raw.length ? `Nothing from ${MIN_YEAR} on matched. Try another search.` : "No matches. Try a different spelling."); return; }
+    statusEl.textContent = "";
     items.forEach((it) => {
-      const li = el("li", "sg-res"); li.draggable = !it.known; if (it.known) li.classList.add("is-known");
-      let img; if (it.art) { img = new Image(); img.src = small(it.art); img.alt = ""; img.referrerPolicy = "no-referrer"; } else img = el("div", "ph");
-      const t = el("div", "t"); t.append(el("b", "", it.song), el("span", "", it.year ? `${it.artist} \u00B7 ${it.year}` : it.artist));
-      if (it.known) t.append(el("div", "sg-known", "We play this one!"));
-      li.append(img, t);
-      if (it.preview) li.append(playButton(it.preview));
-      if (!it.known) {
-        const add = el("button", "sg-add", it.listedId ? "+ Vote" : "+ Add"); add.type = "button";
-        add.addEventListener("click", () => addSong(it)); li.append(add);
-        li.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", JSON.stringify(it)); e.dataTransfer.effectAllowed = "copy"; document.body.classList.add("is-dragging"); });
-        li.addEventListener("dragend", () => { document.body.classList.remove("is-dragging"); listCol.classList.remove("is-over"); });
-      }
+      const known = isKnown(it);
+      const li = el("li", "sg-res"); if (known) li.classList.add("is-known");
+      let img; if (it.thumb || it.art) { img = new Image(); img.src = it.thumb || it.art; img.alt = ""; img.referrerPolicy = "no-referrer"; } else img = el("div", "ph");
+      const t = el("div", "t"); t.append(el("b", "", it.song), el("span", "", `${it.artist} · ${it.year}`));
+      li.append(img, t, playButton(it.id));
+      linkToSpotify(li, it.url);
+      if (known) t.append(el("div", "sg-known", "We play this one!"));
+      else { const add = el("button", "sg-add", listed.has(keyOf(it.song, it.artist)) ? "+ Vote" : "+ Add"); add.type = "button"; add.addEventListener("click", () => addSong(it)); li.append(add); }
       resultsEl.append(li);
     });
   }
+  clearBtn.addEventListener("click", () => { q.value = ""; seq++; clearTimeout(timer); resultsEl.replaceChildren(); statusEl.textContent = ""; clearBtn.hidden = true; q.focus(); });
   q.addEventListener("input", () => {
     clearTimeout(timer);
+    clearBtn.hidden = !q.value;
     const term = q.value.trim();
-    if (term.length < 2) { resultsEl.replaceChildren(); say(""); return; }
-    say("Searching\u2026");
+    if (term.length < 2) { resultsEl.replaceChildren(); statusEl.textContent = ""; return; }
+    statusEl.textContent = "Searching…";
     const mine = ++seq;
     timer = setTimeout(async () => {
       try {
-        const raw = await itunes(term);
-        if (mine !== seq) return;
-        const listed = new Map(songs.map((s) => [songKey(s.song, s.artist), s.id]));
-        const seen = new Set(), items = [];
-        for (const it of pickOriginals(raw.filter(allowed), (x) => songKey(x.song, x.artist))) {
-          const k = songKey(it.song, it.artist);
-          if (seen.has(k)) continue;
-          seen.add(k);
-          items.push({ ...it, known: isKnown(it), listedId: listed.get(k) || null });
-          if (items.length >= 8) break;
-        }
-        showResults(items);
-      }
-      catch { if (mine === seq) say("Search isn\u2019t available right now. Please try again in a moment."); }
+        const key = term.toLowerCase();
+        const raw = searchCache.get(key) || (await api("/api/songs/search?" + new URLSearchParams({ q: term }))).results;
+        searchCache.set(key, raw);
+        if (mine === seq) showResults(raw);
+      } catch (err) { if (mine === seq) say(err.status === 429 ? err.message : "Search isn’t available right now. Please try again in a moment."); }
     }, 350);
   });
   q.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
 
-  // ---------- drag a search result onto the list ----------
-  const listCol = $("list-col");
-  listCol.addEventListener("dragover", (e) => { if (!document.body.classList.contains("is-dragging")) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; listCol.classList.add("is-over"); });
-  listCol.addEventListener("dragleave", (e) => { if (!listCol.contains(e.relatedTarget)) listCol.classList.remove("is-over"); });
-  listCol.addEventListener("drop", (e) => {
-    e.preventDefault(); listCol.classList.remove("is-over"); document.body.classList.remove("is-dragging");
-    let it; try { it = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
-    if (it && Number.isInteger(it.trackId)) addSong(it);
-  });
+  // ---------- band only: export ----------
+  if (adminToken) {
+    const a = el("a", "sr-admin", "Download the list (spreadsheet)"); a.href = "#";
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const res = await fetch("/api/songs/export", { headers: { Authorization: "Bearer " + adminToken } });
+      if (!res.ok) { say("That admin key wasn’t accepted."); return; }
+      const blob = await res.blob(); const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob); link.download = `audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
+    });
+    $("sr-rest").after(a);
+  }
 
   loadList();
 })();
 </script>
+<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
 </body>
 </html>

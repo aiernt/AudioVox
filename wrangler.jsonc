@@ -10,10 +10,10 @@
     // Only /api/* goes through the worker; everything else is served straight from the files.
     "run_worker_first": ["/api/*"]
   },
-  // D1 database for the song-request list. No database_id on purpose: Cloudflare
-  // creates it automatically on the first deploy. The tables are created by
-  // worker/songs.js on first use.
-  "d1_databases": [{ "binding": "DB", "database_name": "audiovox-songs" }],
+  // D1 database for the song-request list (fan songs and votes). Pinned by ID so every
+  // deploy uses this exact database and can never create a new, empty one.
+  // Deploys never change the data in it; the tables are created by worker/songs.js if missing.
+  "d1_databases": [{ "binding": "DB", "database_name": "audiovox-songs", "database_id": "18abae3d-773c-4abb-b01e-320b01480aa5" }],
   // Keep the variables and secrets set in the Cloudflare dashboard
   // (RESEND_API_KEY, BOOKING_TO, BOOKING_FROM) when deploying from GitHub.
   "keep_vars": true,

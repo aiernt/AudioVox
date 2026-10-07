@@ -1,34 +1,41 @@
 // "Songs We Should Learn": the shared, public song-request list (song-requests.html).
 // Stored in a Cloudflare D1 database (binding "DB", see wrangler.jsonc) and served from /api/songs*.
 //
-// Fans search Apple's music catalog from their own browser (Apple rate-limits requests coming from Cloudflare's
-// servers, so the search can't run here), then add a song or vote for one already on the list.
-// Every rule is checked again here, on the server, so it can't be skipped:
+// Fans search Spotify (through this Worker, so the app keys stay secret), then add a song or vote for one
+// already on the list. Every rule is checked here, on the server, so it can't be skipped:
 //   - songs released from 1989 to now
 //   - no songs with an explicit word spelled out in the TITLE (explicit lyrics and masked spellings are fine)
 //   - songs the band already plays (KNOWN_SONGS) can't be requested
 //   - a quick math check before adding, 5 new songs per visitor per hour, one vote per song per visitor
+//   - every added song is looked up on Spotify by the server, so made-up songs can't be added
 //
-//   GET    /api/songs                 the list, most votes first (plus the band's "already play" list for the page)
+//   GET    /api/songs                 the list, most votes first (plus the band's "already play" list)
+//   GET    /api/songs/search?q=...    search Spotify (cached; rate-limited per visitor)
 //   GET    /api/songs/challenge       a fresh "what's 3 + 4?" question
 //   POST   /api/songs/unlock          answer the question -> a pass that allows adding for a few hours
-//   POST   /api/songs                 add a song {trackId, song, artist, year, art, preview, unlock}; a listed song just gets a vote
+//   POST   /api/songs                 add a song {sp: Spotify track id, unlock}; a listed song just gets a vote
 //   POST   /api/songs/:id/vote        vote for a song
-//   DELETE /api/songs/:id             remove a song (band only: "Authorization: Bearer <ADMIN_TOKEN>")
+//   DELETE /api/songs/:id/vote        take your vote back
+//   -- band only ("Authorization: Bearer <ADMIN_TOKEN>"; open /song-requests#admin=TOKEN once per device):
+//   DELETE /api/songs/:id             remove a song
+//   GET    /api/songs/export          download the list as a spreadsheet (CSV)
 //
 // Settings (Cloudflare dashboard -> Workers & Pages -> audiovox -> Settings -> Variables and secrets):
-//   ADMIN_TOKEN  (secret) lets the band remove songs from the page (open /song-requests#admin=TOKEN once)
+//   SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET  (secrets) the Spotify app keys
+//   ADMIN_TOKEN  (secret) lets the band remove songs and export the list
 //   SONG_NOTIFY  (text)   emails BOOKING_TO via Resend when a fan adds a song. On by default; "off" turns it off.
 //   VOTE_SALT    (secret) optional extra salt for the hashed visitor ids
 
 const MIN_YEAR = 1989;
 const LIST_LIMIT = 500;            // most songs the list will hold (stops a flood)
 const NEW_SONGS_PER_HOUR = 5;      // per visitor
-const VOTES_PER_HOUR = 60;         // per visitor
+const VOTES_PER_HOUR = 60;         // per visitor (votes and un-votes each)
+const SEARCHES_PER_MINUTE = 30;    // per visitor
 const CHALLENGES_PER_HOUR = 30;    // per visitor
 const CHALLENGE_TTL = 30 * 60 * 1000;
 const UNLOCK_TTL = 4 * 3600 * 1000;
 const HOUR = 3600 * 1000;
+const SEARCH_CACHE_SECONDS = 6 * 3600;
 
 // Songs the band already plays. Most match by TITLE alone, so cover versions by other artists are caught too.
 // Entries marked true have a very common title (e.g. "Higher", "Black"), so they also need the artist to match.
@@ -52,19 +59,13 @@ const KNOWN_SONGS = [
   ["Fight for Your Right", "Beastie Boys"], ["Slide", "Goo Goo Dolls", true], ["Are You Gonna Be My Girl", "Jet"],
 ];
 
-// The band's starting shortlist (added once, when the list is first created): [song, artist, year, art, preview]
+// The band's starting shortlist. Added ONCE, the very first time the list is created (never again, even if
+// the list is later emptied). Spotify details are filled in automatically: [song, artist, year]
 const SEED_SONGS = [
-  ["Black Hole Sun", "Soundgarden", 1994, "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/69/60/2e/69602e04-f483-70a7-51b6-5dc6b58273ce/00602537879830.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/fa/c0/77/fac07771-3fd9-165e-2829-b19614198077/mzaf_3138425259586801377.plus.aac.p.m4a"],
-  ["Lithium", "Nirvana", 1991, "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/95/fd/b9/95fdb9b2-6d2b-92a6-97f2-51c1a6d77f1a/00602527874609.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/10/26/3a/10263abf-e10b-1b19-282f-2cfe1e160bb0/mzaf_13537127778296504562.plus.aac.p.m4a"],
-  ["Even Flow", "Pearl Jam", 1991, "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/42/22/dd/4222ddfc-35a9-ab18-f467-cc370f6f24d6/098707793424.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b2/c9/f5/b2c9f56f-73f0-263b-edf9-4a46b2503e76/mzaf_11196559182905789809.plus.aac.p.m4a"],
-  ["Today", "The Smashing Pumpkins", 1993, "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/3a/dc/08/3adc08b0-e98c-b5dd-943e-a37c7ed06205/13UABIM03615.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/c2/dd/f7/c2ddf7dd-f8d5-18ee-0ea1-658a7441145b/mzaf_5814503050448650956.plus.aac.p.m4a"],
-  ["Interstate Love Song", "Stone Temple Pilots", 1994, "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/d7/15/cc/d715cc36-0741-14b3-39b5-1f1f5ac88dd2/603497851553.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/24/19/e6/2419e6a9-55eb-8578-8ffd-c4fbb24c00c4/mzaf_3187694087858936927.plus.aac.p.m4a"],
-  ["Semi-Charmed Life", "Third Eye Blind", 1997, "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/8f/21/898f2118-a3e1-2b4a-7481-d986d09ffc29/mzi.jbqxjhwg.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e7/77/7d/e7777db5-3b28-e029-f41a-6a6058275f76/mzaf_17353091552026184524.plus.aac.p.m4a"],
-  ["Mr. Jones", "Counting Crows", 1993, "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/3b/dc/90/3bdc90a2-3697-0c5e-3265-65ccaa7dcbb3/14UMGIM00847.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/f3/b0/2a/f3b02a56-a5bf-e940-4370-2e0a609f1cb4/mzaf_16264556580562087321.plus.aac.p.m4a"],
-  ["Cannonball", "The Breeders", 1993, "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/c7/f2/9c/c7f29c36-434e-3e40-b517-dce503eb2d5c/652637301458.png/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/0a/4b/bd/0a4bbd63-a2b3-7eee-0ebe-19a7dbd72896/mzaf_8660903494435327038.plus.aac.p.m4a"],
-  ["Zombie", "The Cranberries", 1994, "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/bd/f8/87/bdf8870e-2df6-07b3-75c9-99a2911fc8b5/24UMGIM84189.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/d1/44/75/d1447593-07e6-18e7-11e8-8368f3a93aef/mzaf_10254257033740545525.plus.aac.p.m4a"],
-  ["Closing Time", "Semisonic", 1998, "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6e/02/9e/6e029e4e-66ee-11ec-f536-4f28c9db9a43/18UMGIM47330.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/19/9d/55/199d55f1-a082-b5aa-1f2f-dbe0ee5092e6/mzaf_14428796061819406061.plus.aac.p.m4a"],
-  ["Hey Jealousy", "Gin Blossoms", 1992, "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/13/a7/76/13a77656-a654-e827-fcba-91d4516480fe/06UMGIM18663.rgb.jpg/100x100bb.jpg", "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/1d/6d/eb/1d6deb34-d841-2c58-f635-8a6dfca65827/mzaf_17213998669808579806.plus.aac.p.m4a"],
+  ["Black Hole Sun", "Soundgarden", 1994], ["Lithium", "Nirvana", 1991], ["Even Flow", "Pearl Jam", 1991],
+  ["Today", "The Smashing Pumpkins", 1993], ["Interstate Love Song", "Stone Temple Pilots", 1994],
+  ["Semi-Charmed Life", "Third Eye Blind", 1997], ["Mr. Jones", "Counting Crows", 1993], ["Cannonball", "The Breeders", 1993],
+  ["Zombie", "The Cranberries", 1994], ["Closing Time", "Semisonic", 1998], ["Hey Jealousy", "Gin Blossoms", 1992],
 ];
 
 // Explicit words that keep a song off the list when they're spelled out in the TITLE (whole words only,
@@ -74,8 +75,8 @@ const BLOCKED_TITLE_WORDS = ["fuck", "fucking", "fucked", "fucker", "fuckin", "m
   "nigger", "nigga", "faggot", "fag", "retard"];
 const blockedTitleRx = new RegExp("(?:^|[^a-z])(?:" + BLOCKED_TITLE_WORDS.join("|") + ")(?:$|[^a-z])", "i");
 
-const json = (body, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+const json = (body, status = 200, extra = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...extra } });
 
 const norm = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 const titleKey = (song) => norm(String(song).replace(/[\(\[].*?[\)\]]/g, ""));   // "Everlong (Acoustic)" -> "everlong"
@@ -108,6 +109,82 @@ async function visitorId(request, env) {
   return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${ip}|${env.VOTE_SALT || "audiovox-songs"}`))).slice(0, 32);
 }
 
+// ---------- Spotify ----------
+// "Client credentials" sign-in: the Worker gets a short-lived pass with the app keys. No visitor logins.
+let spToken = null, spTokenExpires = 0;
+async function spotifyToken(env) {
+  if (spToken && Date.now() < spTokenExpires - 60_000) return spToken;
+  if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) throw new Error("Spotify keys are not set");
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { Authorization: "Basic " + btoa(`${env.SPOTIFY_CLIENT_ID}:${env.SPOTIFY_CLIENT_SECRET}`), "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=client_credentials",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.access_token) throw new Error(`Spotify sign-in failed (${res.status})`);
+  spToken = data.access_token;
+  spTokenExpires = Date.now() + (data.expires_in || 3600) * 1000;
+  return spToken;
+}
+async function spotifyGet(env, path) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch("https://api.spotify.com/v1/" + path, { headers: { Authorization: `Bearer ${await spotifyToken(env)}` } });
+    if (res.status === 401 && attempt === 0) { spToken = null; continue; }   // pass expired early: get a new one
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const err = new Error(`Spotify ${res.status}`); err.status = res.status; throw err; }
+    return data;
+  }
+}
+// Spotify writes versions after a dash ("Today - 2011 Remaster"): show the plain title, keep the full one.
+const VERSION_RX = /^(.*?)\s+-\s+(.*(?:remaster|version|live|mix|edit|mono|stereo|demo|acoustic|single|recorded|session|take|\b\d{4}\b).*)$/i;
+function mapTrack(t) {
+  const name = t.name || "";
+  const m = name.match(VERSION_RX);
+  const imgs = t.album?.images || [];
+  return {
+    id: t.id, song: m ? m[1] : name, fullTitle: m ? name : undefined,
+    artist: (t.artists || []).map((a) => a.name).join(", "),
+    album: t.album?.name || "", albumType: t.album?.album_type || "",
+    albumArtist: (t.album?.artists || []).map((a) => a.name).join(", "),
+    date: t.album?.release_date || "", year: Number(String(t.album?.release_date || "").slice(0, 4)) || 0,
+    art: imgs[0]?.url || "", thumb: imgs[imgs.length - 1]?.url || "",
+    url: t.external_urls?.spotify || "",
+  };
+}
+async function spotifySearch(env, ctx, host, q) {
+  const cacheKey = new Request(`https://${host}/__cache/spotify-search/${encodeURIComponent(q.toLowerCase())}`);
+  const hit = await caches.default.match(cacheKey);
+  if (hit) return hit.json();
+  // Development-mode Spotify apps get at most 10 results per request, so ask for two pages.
+  const pages = await Promise.all([0, 10].map((offset) =>
+    spotifyGet(env, "search?" + new URLSearchParams({ q, type: "track", market: "US", limit: "10", offset: String(offset) }))));
+  const results = pages.flatMap((p) => p.tracks?.items || []).filter(Boolean).map(mapTrack);
+  ctx.waitUntil(caches.default.put(cacheKey, new Response(JSON.stringify(results), { headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${SEARCH_CACHE_SECONDS}` } })));
+  return results;
+}
+
+// Picking the original album when Spotify has the same song on several (same rules as the page).
+function editionPenalty(it) {
+  const a = String(it.album || "").toLowerCase();
+  if (/karaoke|tribute|lullaby|rockabye|in the style of|originally performed|backing track|made famous/.test(a)) return 3;
+  if (it.albumArtist && norm(it.albumArtist) !== norm(it.artist)) return 2;
+  if (/greatest|hits|best of|collection|anthology|essential|compilation|\blive\b|soundtrack|now that|sampler|number 1|#1|\ba-sides\b|\bb-sides\b|singles|rarities|retrospective/.test(a)) return 2;
+  if (/remaster|deluxe|anniversary|edition|expanded|bonus|reissue|- single|- ep|version|sped.?up|slowed/.test(a)) return 1;
+  if (it.albumType === "compilation") return 1;
+  return 0;
+}
+function trackPenalty(it) {
+  const full = it.fullTitle || it.song;
+  const extra = (String(full).match(/[\(\[].*?[\)\]]|\s-\s.*$/g) || []).join(" ");
+  return /\b(live|acoustic|demo|remix|instrumental|karaoke|unplugged|session|rehearsal|mix|edit|version|take)\b/i.test(extra) ? 2 : 0;
+}
+function chooseOriginal(list) {
+  const scored = list.map((it, i) => ({ it, i, p: editionPenalty(it), t: trackPenalty(it), d: String(it.date || "9999").slice(0, 10) }));
+  const pool = scored.some((s) => s.p < 2) ? scored.filter((s) => s.p < 2) : scored;
+  pool.sort((a, b) => (a.t - b.t) || (a.d < b.d ? -1 : a.d > b.d ? 1 : 0) || (a.p - b.p) || (a.i - b.i));
+  return pool[0]?.it;
+}
+
 // ---------- database ----------
 let schemaReady = null;
 function ensureSchema(db) {
@@ -134,65 +211,86 @@ function ensureSchema(db) {
         db.prepare(`CREATE TABLE IF NOT EXISTS song_challenges (id TEXT PRIMARY KEY, answer INTEGER NOT NULL, voter TEXT NOT NULL, expires INTEGER NOT NULL)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS song_unlocks (token TEXT PRIMARY KEY, voter TEXT NOT NULL, expires INTEGER NOT NULL)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS song_hits (voter TEXT NOT NULL, bucket INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (voter, bucket))`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS song_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
         db.prepare("CREATE INDEX IF NOT EXISTS idx_songs_rank ON songs (votes DESC, created_at ASC)"),
         db.prepare("CREATE INDEX IF NOT EXISTS idx_song_votes_voter ON song_votes (voter, created_at)"),
       ]);
-      const { n } = await db.prepare("SELECT COUNT(*) AS n FROM songs").first();
-      if (n === 0 && SEED_SONGS.length) {
+      // Spotify columns, added to an existing database without touching any songs or votes.
+      // sp = Spotify track id ('' = not looked up yet, '-' = Spotify didn't have it), url = link to the song on Spotify.
+      const { results: cols } = await db.prepare("PRAGMA table_info(songs)").all();
+      const have = new Set(cols.map((c) => c.name));
+      if (!have.has("sp")) await db.prepare("ALTER TABLE songs ADD COLUMN sp TEXT NOT NULL DEFAULT ''").run();
+      if (!have.has("url")) await db.prepare("ALTER TABLE songs ADD COLUMN url TEXT NOT NULL DEFAULT ''").run();
+      // The starter shortlist goes in once, ever. A database that already has songs counts as seeded.
+      const seeded = await db.prepare("SELECT v FROM song_settings WHERE k = 'seeded'").first();
+      if (!seeded) {
+        const { n } = await db.prepare("SELECT COUNT(*) AS n FROM songs").first();
         const now = Date.now();
-        await db.batch(SEED_SONGS.map(([song, artist, year, art, preview], i) =>
-          db.prepare("INSERT OR IGNORE INTO songs (key, song, artist, year, art, preview, votes, source, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, 'band', ?7)")
-            .bind(songKey(song, artist), song, artist, year, art, preview, now + i)));
+        const writes = n === 0 ? SEED_SONGS.map(([song, artist, year], i) =>
+          db.prepare("INSERT OR IGNORE INTO songs (key, song, artist, year, votes, source, created_at) VALUES (?1, ?2, ?3, ?4, 0, 'band', ?5)")
+            .bind(songKey(song, artist), song, artist, year, now + i)) : [];
+        writes.push(db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('seeded', ?1)").bind(String(now)));
+        await db.batch(writes);
       }
     })().catch((err) => { schemaReady = null; throw err; });
   }
   return schemaReady;
 }
 
+// Songs without Spotify details yet (the starter list, and songs added before the switch to Spotify) are
+// looked up in the background, a few at a time, so the page gets Spotify artwork and players.
+let backfilling = false;
+async function backfillSpotify(env, ctx, host, db) {
+  if (backfilling || !env.SPOTIFY_CLIENT_ID) return;
+  backfilling = true;
+  try {
+    const { results } = await db.prepare("SELECT id, song, artist FROM songs WHERE sp = '' LIMIT 4").all();
+    for (const r of results) {
+      let found = null;
+      try {
+        const items = await spotifySearch(env, ctx, host, `track:"${r.song}" artist:"${r.artist.replace(/^the\s+/i, "")}"`);
+        found = chooseOriginal(items.filter((it) => songKey(it.song, it.artist) === songKey(r.song, r.artist)));
+      } catch (err) { console.error("Spotify backfill", r.song, err.message); continue; }
+      if (found) await db.prepare("UPDATE songs SET sp = ?1, url = ?2, art = ?3, year = CASE WHEN ?4 > 0 THEN ?4 ELSE year END WHERE id = ?5")
+        .bind(found.id, found.url, found.art, found.year, r.id).run();
+      else await db.prepare("UPDATE songs SET sp = '-' WHERE id = ?1").bind(r.id).run();
+    }
+  } finally { backfilling = false; }
+}
+
 async function listSongs(db, voter) {
   const { results } = await db.prepare(
-    `SELECT s.id, s.song, s.artist, s.year, s.art, s.preview, s.votes, s.source,
+    `SELECT s.id, s.song, s.artist, s.year, s.art, s.sp, s.url, s.votes, s.source,
             EXISTS (SELECT 1 FROM song_votes v WHERE v.song_id = s.id AND v.voter = ?1) AS voted
      FROM songs s ORDER BY s.votes DESC, s.created_at ASC LIMIT ${LIST_LIMIT}`).bind(voter).all();
-  return results.map((r) => ({ ...r, voted: !!r.voted }));
+  return results.map((r) => ({ ...r, sp: r.sp === "-" ? "" : r.sp, voted: !!r.voted }));
 }
 
+// Adding and removing a vote each change the vote row and the song's count together, in one step.
 async function addVote(db, id, voter) {
-  const ins = await db.prepare("INSERT OR IGNORE INTO song_votes (song_id, voter, created_at) VALUES (?1, ?2, ?3)").bind(id, voter, Date.now()).run();
-  if (!ins.meta.changes) return false;
-  await db.prepare("UPDATE songs SET votes = votes + 1 WHERE id = ?1").bind(id).run();
-  return true;
+  const now = Date.now();
+  const [ins] = await db.batch([
+    db.prepare("INSERT OR IGNORE INTO song_votes (song_id, voter, created_at) VALUES (?1, ?2, ?3)").bind(id, voter, now),
+    db.prepare("UPDATE songs SET votes = votes + 1 WHERE id = ?1 AND changes() > 0").bind(id),
+  ]);
+  return !!ins.meta.changes;
+}
+async function removeVote(db, id, voter) {
+  const [del] = await db.batch([
+    db.prepare("DELETE FROM song_votes WHERE song_id = ?1 AND voter = ?2").bind(id, voter),
+    db.prepare("UPDATE songs SET votes = MAX(votes - 1, 0) WHERE id = ?1 AND changes() > 0").bind(id),
+  ]);
+  return !!del.meta.changes;
 }
 
-// Counts an action in the current time bucket and says whether this visitor is over the limit.
+// Counts an action in the current time window and says whether this visitor is over the limit.
 async function overLimit(db, voter, kind, limit, bucketMs) {
-  const bucket = Math.floor(Date.now() / bucketMs) * bucketMs;   // start of the time window, in ms
+  const bucket = Math.floor(Date.now() / bucketMs) * bucketMs;
   const key = `${kind}:${voter}`;
   await db.prepare("INSERT INTO song_hits (voter, bucket, n) VALUES (?1, ?2, 1) ON CONFLICT (voter, bucket) DO UPDATE SET n = n + 1").bind(key, bucket).run();
   const row = await db.prepare("SELECT n FROM song_hits WHERE voter = ?1 AND bucket = ?2").bind(key, bucket).first();
   if (Math.random() < 0.02) await db.prepare("DELETE FROM song_hits WHERE bucket < ?1").bind(Date.now() - 2 * HOUR).run().catch(() => {});
   return row.n > limit;
-}
-
-// ---------- Apple's music catalog (free, no key) ----------
-function mapTrack(r) {
-  return {
-    trackId: r.trackId, song: r.trackName || "", artist: r.artistName || "",
-    year: Number(String(r.releaseDate || "").slice(0, 4)) || 0,
-    art: r.artworkUrl100 || "", preview: r.previewUrl || "",
-  };
-}
-async function itunes(params, ctx, host) {
-  const url = "https://itunes.apple.com/" + params;
-  const cache = caches.default;
-  const cacheKey = new Request(`https://${host}/__cache/itunes/${params}`);
-  const hit = await cache.match(cacheKey);
-  if (hit) return hit.json();
-  const res = await fetch(url, { headers: { "User-Agent": "AudioVox song requests (audiovox.huddlegab.com)" } });
-  if (!res.ok) throw new Error(`Apple search ${res.status}`);
-  const data = await res.json();
-  ctx.waitUntil(cache.put(cacheKey, new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=86400" } })));
-  return data;
 }
 
 function notifyNewSong(env, ctx, s, siteUrl) {
@@ -206,8 +304,8 @@ function notifyNewSong(env, ctx, s, siteUrl) {
       from: env.BOOKING_FROM,
       to: env.BOOKING_TO.split(",").map((x) => x.trim()).filter(Boolean),
       subject: `New song request: ${s.song} - ${s.artist}`.replace(/[\r\n]+/g, " ").slice(0, 150),
-      text: `A fan added a song to the request list.\n\nSong: ${s.song}\nArtist: ${s.artist}\nYear: ${s.year || "-"}\n\nSee the list: ${page}\n`,
-      html: `<h2>New song request</h2><p><b>${esc(s.song)}</b> &mdash; ${esc(s.artist)}${s.year ? ` (${s.year})` : ""}</p><p><a href="${esc(page)}">See the list</a></p>`,
+      text: `A fan added a song to the request list.\n\nSong: ${s.song}\nArtist: ${s.artist}\nYear: ${s.year || "-"}\n${s.url ? `On Spotify: ${s.url}\n` : ""}\nSee the list: ${page}\n`,
+      html: `<h2>New song request</h2><p><b>${esc(s.song)}</b> &mdash; ${esc(s.artist)}${s.year ? ` (${s.year})` : ""}</p>${s.url ? `<p><a href="${esc(s.url)}">Listen on Spotify</a></p>` : ""}<p><a href="${esc(page)}">See the list</a></p>`,
     }),
   }).catch((err) => console.error("Song notify failed", err)));
 }
@@ -219,6 +317,7 @@ async function readJson(request) {
   if (!data || typeof data !== "object") throw new Error("bad body");
   return data;
 }
+const csvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 // ---------- the API ----------
 export async function handleSongs(request, env, ctx) {
@@ -239,9 +338,33 @@ export async function handleSongs(request, env, ctx) {
     await ensureSchema(env.DB);
     const db = env.DB;
     const voter = await visitorId(request, env);
+    const sid = (v) => (typeof v === "string" && /^[A-Za-z0-9]{10,40}$/.test(v) ? v : "");
 
     // GET /api/songs
-    if (parts.length === 2 && method === "GET") return json({ ok: true, songs: await listSongs(db, voter), known: KNOWN_SONGS });
+    if (parts.length === 2 && method === "GET") {
+      ctx.waitUntil(backfillSpotify(env, ctx, url.host, db).catch((e) => console.error("backfill", e.message)));
+      return json({ ok: true, songs: await listSongs(db, voter), known: KNOWN_SONGS });
+    }
+
+    // GET /api/songs/search?q=
+    if (parts.length === 3 && parts[2] === "search" && method === "GET") {
+      const q = (url.searchParams.get("q") || "").trim().slice(0, 100);
+      if (q.length < 2) return json({ ok: true, results: [] });
+      if (await overLimit(db, voter, "search", SEARCHES_PER_MINUTE, 60000)) return json({ ok: false, error: "Slow down a little and try again in a moment." }, 429);
+      try { return json({ ok: true, results: await spotifySearch(env, ctx, url.host, q) }); }
+      catch (err) { console.error("Spotify search", err.message); return json({ ok: false, error: "Search isn’t available right now. Please try again in a moment." }, 502); }
+    }
+
+    // GET /api/songs/export  (band only)
+    if (parts.length === 3 && parts[2] === "export" && method === "GET") {
+      if (!isAdmin(request, env)) return json({ ok: false, error: "Not allowed" }, 403);
+      const { results } = await db.prepare("SELECT id, song, artist, year, votes, source, url, created_at FROM songs ORDER BY votes DESC, created_at ASC").all();
+      const rows = [["Rank", "Song", "Artist", "Year", "Votes", "Added by", "Spotify link", "Added on"]]
+        .concat(results.map((r, i) => [i + 1, r.song, r.artist, r.year || "", r.votes, r.source === "band" ? "Band" : "Fan", r.url, new Date(r.created_at).toISOString().slice(0, 10)]));
+      return new Response("﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n"), { headers: {
+        "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store",
+        "Content-Disposition": `attachment; filename="audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv"` } });
+    }
 
     // GET /api/songs/challenge
     if (parts.length === 3 && parts[2] === "challenge" && method === "GET") {
@@ -260,8 +383,8 @@ export async function handleSongs(request, env, ctx) {
       const id = typeof data.challengeId === "string" ? data.challengeId.slice(0, 64) : "";
       const row = id ? await db.prepare("SELECT answer, expires FROM song_challenges WHERE id = ?1").bind(id).first() : null;
       if (row) await db.prepare("DELETE FROM song_challenges WHERE id = ?1").bind(id).run(); // every question is single-use
-      if (!row || row.expires < Date.now()) return json({ ok: false, code: "challenge", error: "That question timed out. Please answer the new one." }, 400);
-      if (parseInt(String(data.answer).trim(), 10) !== row.answer) return json({ ok: false, code: "challenge", error: "That wasn’t quite right. Try the new question." }, 400);
+      if (!row || row.expires < Date.now()) return json({ ok: false, code: "challenge", error: "That one timed out. Try this one." }, 400);
+      if (parseInt(String(data.answer).trim(), 10) !== row.answer) return json({ ok: false, code: "challenge", error: "Not quite — try this one." }, 400);
       const token = crypto.randomUUID();
       await db.batch([
         db.prepare("DELETE FROM song_unlocks WHERE expires < ?1").bind(Date.now()),
@@ -270,7 +393,7 @@ export async function handleSongs(request, env, ctx) {
       return json({ ok: true, unlock: token });
     }
 
-    // POST /api/songs  {trackId, unlock}
+    // POST /api/songs  {sp, unlock}
     if (parts.length === 2 && method === "POST") {
       let data;
       try { data = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
@@ -278,24 +401,17 @@ export async function handleSongs(request, env, ctx) {
       const pass = typeof data.unlock === "string" ? await db.prepare("SELECT voter, expires FROM song_unlocks WHERE token = ?1").bind(data.unlock.slice(0, 64)).first() : null;
       if (!pass || pass.voter !== voter || pass.expires < Date.now()) return json({ ok: false, code: "locked", error: "Answer the quick check first, then add your song." }, 403);
 
-      const trackId = Number(data.trackId);
-      if (!Number.isInteger(trackId) || trackId < 1) return json({ ok: false, error: "Please pick a song from the search." }, 400);
-      // Look the song up with Apple ourselves when Apple will answer us, and save what Apple says.
-      // Apple often refuses requests from Cloudflare's servers; then we use what the page sent, after checking
-      // it: the rules below, and the picture and preview have to be Apple links.
+      const spId = sid(data.sp);
+      if (!spId) return json({ ok: false, error: "Please pick a song from the search." }, 400);
+      // The server looks the song up on Spotify itself and saves what Spotify says, never what the page sent.
       let t;
-      try {
-        const found = (await itunes("lookup?" + new URLSearchParams({ id: String(trackId), entity: "song", country: "US" }), ctx, url.host)).results || [];
-        const raw = found.find((r) => r.trackId === trackId && (r.kind === "song" || r.wrapperType === "track"));
-        if (!raw) return json({ ok: false, error: "We couldn’t find that song. Try searching again." }, 404);
-        t = mapTrack(raw);
-      } catch {
-        const str = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u001F\u007F]/g, "").trim().slice(0, max) : "");
-        t = { trackId, song: str(data.song, 200), artist: str(data.artist, 200), year: Number(data.year) || 0, art: str(data.art, 500), preview: str(data.preview, 500) };
-        if (!t.song || !t.artist) return json({ ok: false, error: "Please pick a song from the search." }, 400);
-        if (t.art && !/^https:\/\/is\d+-ssl\.mzstatic\.com\//.test(t.art)) t.art = "";
-        if (t.preview && !/^https:\/\/audio-ssl\.itunes\.apple\.com\//.test(t.preview)) t.preview = "";
+      try { t = mapTrack(await spotifyGet(env, `tracks/${spId}?market=US`)); }
+      catch (err) {
+        if (err.status === 404 || err.status === 400) return json({ ok: false, error: "We couldn’t find that song. Try searching again." }, 404);
+        console.error("Spotify lookup", err.message);
+        return json({ ok: false, error: "We couldn’t reach Spotify just now. Please try again in a moment." }, 502);
       }
+      if (!t.id || !t.song || !t.artist) return json({ ok: false, error: "We couldn’t find that song. Try searching again." }, 404);
       if (!inYearRange(t.year)) return json({ ok: false, error: `We only add songs from ${MIN_YEAR} on.` }, 400);
       if (explicitTitle(t.song)) return json({ ok: false, error: "Sorry, we can’t add that one to the list." }, 400);
       if (isKnown(t.song, t.artist)) return json({ ok: false, code: "known", error: `We already play “${t.song}”! Come catch it at a show.` }, 409);
@@ -313,8 +429,8 @@ export async function handleSongs(request, env, ctx) {
 
       let id;
       try {
-        const ins = await db.prepare("INSERT INTO songs (key, track_id, song, artist, year, art, preview, votes, source, submitter, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 'fan', ?8, ?9)")
-          .bind(key, trackId, t.song.slice(0, 200), t.artist.slice(0, 200), t.year, t.art.slice(0, 500), t.preview.slice(0, 500), voter, Date.now()).run();
+        const ins = await db.prepare("INSERT INTO songs (key, sp, url, song, artist, year, art, votes, source, submitter, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 'fan', ?8, ?9)")
+          .bind(key, t.id, t.url.slice(0, 300), t.song.slice(0, 200), t.artist.slice(0, 200), t.year, t.art.slice(0, 500), voter, Date.now()).run();
         id = ins.meta.last_row_id;
       } catch (err) {
         const dupe = await db.prepare("SELECT id FROM songs WHERE key = ?1").bind(key).first();   // added by someone else a moment ago
@@ -327,15 +443,14 @@ export async function handleSongs(request, env, ctx) {
       return json({ ok: true, merged: false, id, songs: await listSongs(db, voter) });
     }
 
-    // POST /api/songs/:id/vote
-    if (parts.length === 4 && parts[3] === "vote" && method === "POST") {
+    // POST /api/songs/:id/vote  and  DELETE /api/songs/:id/vote (take it back)
+    if (parts.length === 4 && parts[3] === "vote" && (method === "POST" || method === "DELETE")) {
       const id = Number(parts[2]);
       if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: "Not found" }, 404);
       if (!(await db.prepare("SELECT id FROM songs WHERE id = ?1").bind(id).first())) return json({ ok: false, error: "Not found" }, 404);
-      const recent = await db.prepare("SELECT COUNT(*) AS n FROM song_votes WHERE voter = ?1 AND created_at > ?2").bind(voter, Date.now() - HOUR).first();
-      if (recent.n >= VOTES_PER_HOUR) return json({ ok: false, error: "Too many votes. Try again later." }, 429);
-      const counted = await addVote(db, id, voter);
-      return json({ ok: true, counted, songs: await listSongs(db, voter) });
+      if (await overLimit(db, voter, method === "POST" ? "vote" : "unvote", VOTES_PER_HOUR, HOUR)) return json({ ok: false, error: "Too many votes. Try again later." }, 429);
+      const changed = method === "POST" ? await addVote(db, id, voter) : await removeVote(db, id, voter);
+      return json({ ok: true, counted: changed, songs: await listSongs(db, voter) });
     }
 
     // DELETE /api/songs/:id  (band only)
