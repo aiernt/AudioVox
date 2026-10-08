@@ -152,8 +152,9 @@
       const down = el("button", { title: "Move later", disabled: i === gallery.length - 1 }, "→");
       const del = el("button", { class: "danger" }, "Delete");
       const vis = el("input", { type: "checkbox", checked: g.visible });
-      const li = el("li", { class: "gitem" + (g.alt ? "" : " missing-alt") + (g.visible ? "" : " is-hidden"), draggable: true },
-        el("img", { src: show(g.src), alt: g.alt, loading: "lazy" }),
+      const pic = el("img", { src: show(g.src), alt: g.alt, loading: "lazy", draggable: false, title: "Drag the picture to move it" });
+      const li = el("li", { class: "gitem" + (g.alt ? "" : " missing-alt") + (g.visible ? "" : " is-hidden") },
+        pic,
         el("span", { class: "num" }, `#${i + 1} `, el("span", { class: "off" }, "· Hidden from the carousel")), alt, cap,
         el("label", { class: "check" }, vis, "Show in the carousel"),
         el("div", { class: "row" }, save, up, down, del));
@@ -176,15 +177,25 @@
         if (!confirm("Delete this photo for good?\n\nTo just take it off the site and keep it here, untick \"Show in the carousel\" instead.")) return;
         try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "DELETE" }); gallery = d.gallery; renderGallery(); toast("Deleted"); } catch (e) { toast(e.message); }
       });
-      // drag to reorder
-      li.addEventListener("dragstart", (e) => { li.classList.add("dragging"); e.dataTransfer.setData("text/plain", String(g.id)); e.dataTransfer.effectAllowed = "move"; });
-      li.addEventListener("dragend", () => li.classList.remove("dragging"));
+      // Drag to reorder: only by the picture, so clicking and dragging in the text boxes selects text as normal.
+      // The whole card is draggable just while the mouse is held down on the picture.
+      const stopDrag = () => { li.draggable = false; li.classList.remove("dragging"); };
+      pic.addEventListener("pointerdown", () => { li.draggable = true; document.addEventListener("pointerup", stopDrag, { once: true }); });
+      li.addEventListener("dragstart", (e) => {
+        if (!li.draggable) { e.preventDefault(); return; }
+        li.classList.add("dragging"); e.dataTransfer.setData("text/plain", String(g.id)); e.dataTransfer.effectAllowed = "move";
+      });
+      li.addEventListener("dragend", stopDrag);
       li.addEventListener("dragover", (e) => { e.preventDefault(); li.classList.add("over"); });
       li.addEventListener("dragleave", () => li.classList.remove("over"));
       li.addEventListener("drop", (e) => {
         e.preventDefault(); li.classList.remove("over");
         const from = Number(e.dataTransfer.getData("text/plain")); if (!from || from === g.id) return;
-        const ids = gallery.map((x) => x.id).filter((x) => x !== from); ids.splice(ids.indexOf(g.id), 0, from); saveOrder(ids);
+        // The dragged photo takes the spot of the photo it's dropped on (moving later or earlier).
+        const ids = gallery.map((x) => x.id);
+        const fromAt = ids.indexOf(from), toAt = ids.indexOf(g.id);
+        if (fromAt < 0 || toAt < 0) return;
+        ids.splice(fromAt, 1); ids.splice(toAt, 0, from); saveOrder(ids);
       });
       list.append(li);
     });
