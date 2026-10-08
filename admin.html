@@ -18,8 +18,16 @@
   h2{margin:28px 0 6px;font-size:1.3rem;}
   .hint{color:var(--muted);margin:0 0 14px;font-size:.9rem;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;}
-  .flyers{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;}
-  .flyer img{width:100%;max-height:340px;object-fit:contain;background:#eee;border-radius:4px;display:block;}
+  .flyers{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start;}
+  .pile{display:flex;flex-direction:column;gap:12px;background:#ececea;border-radius:8px;padding:12px;}
+  .pile h3{margin:0;font-size:1.1rem;}
+  .pile > button{align-self:flex-start;}
+  .flyer h4{margin:0 0 10px;font-size:1rem;}
+  .flyer.is-new{border:2px dashed var(--red);}
+  .flyer.is-hidden{background:#f3f3f1;}
+  .flyer.is-hidden img{opacity:.4;}
+  .flyer .row + .row{margin-top:8px;}
+  .flyer img{width:100%;max-height:300px;object-fit:contain;background:#eee;border-radius:4px;display:block;}
   .flyer .noimg{height:200px;display:flex;align-items:center;justify-content:center;background:#eee;color:var(--muted);border-radius:4px;}
   label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 3px;}
   input[type=text]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:4px;font:inherit;}
@@ -72,7 +80,7 @@
 
 <main id="app" hidden>
   <h2>Flyers</h2>
-  <p class="hint">The two tilted flyers on the home page. Replace the picture, add a stamp (like ROCKED!) or hide a flyer. Changes show on the site straight away.</p>
+  <p class="hint">The flyers sit in two piles on the home page, left and right. The top flyer in each pile is in front; the ones under it peek out behind at an angle. Clicking any flyer on the site opens them all full size. Changes show on the site straight away.</p>
   <div class="flyers" id="flyers"></div>
 
   <h2>Gallery</h2>
@@ -131,7 +139,7 @@
   // ---------- picture library: reuse a picture that's already uploaded (or built into the site) ----------
   let flyersNow = [];
   function usedBy(src) {
-    const u = flyersNow.filter((f) => f.src === src).map((f) => `Flyer ${f.slot}`);
+    const u = flyersNow.filter((f) => f.src === src).map(flyerLabel);
     const gi = gallery.findIndex((g) => g.src === src);
     if (gi >= 0) u.push(`Gallery #${gi + 1}${gallery[gi].visible ? "" : " (hidden)"}`);
     return u;
@@ -176,46 +184,99 @@
     });
   }
 
-  // ---------- flyers ----------
+  // ---------- flyers: two piles (left and right); each pile is listed top first (the top one is in front) ----------
+  const pileOf = (side) => flyersNow.filter((f) => f.side === side);
+  const sideName = (side) => (side === "right" ? "Right" : "Left");
+  function flyerLabel(f) { return `${sideName(f.side)} pile #${pileOf(f.side).indexOf(f) + 1}${f.visible ? "" : " (hidden)"}`; }
+  async function saveFlyerOrder(left, right, done) {
+    try { const d = await api("/api/admin/flyer-order", { method: "PUT", json: { left, right } }); renderFlyers(d.flyers); toast(done || "Order saved"); }
+    catch (e) { toast(e.message); }
+  }
   function renderFlyers(flyers) {
     flyersNow = flyers;
     const box = $("flyers"); box.replaceChildren();
-    [1, 2].forEach((slot) => {
-      const f = flyers.find((x) => x.slot === slot) || { slot, src: "", alt: "Upcoming show flyer", stamp: "", visible: false };
-      let src = f.src;
-      let preview = src ? el("img", { src: show(src), alt: f.alt }) : el("div", { class: "noimg" }, "No picture yet");
-      const setPreview = (url) => { const img = el("img", { src: url }); preview.replaceWith(img); preview = img; };
-      const pick = el("button", {}, "Choose an uploaded picture…");
-      const file = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp" });
-      const alt = el("input", { type: "text", value: f.alt, maxLength: 200 });
-      const stamp = el("input", { type: "text", value: f.stamp, maxLength: 20, placeholder: "e.g. ROCKED!  (leave blank for no stamp)" });
-      const vis = el("input", { type: "checkbox", checked: f.visible });
-      const msg = el("span", { class: "msg" });
-      const save = el("button", { class: "primary" }, "Save flyer " + slot);
-      file.addEventListener("change", () => { if (file.files[0]) { setPreview(URL.createObjectURL(file.files[0])); msg.className = "msg"; msg.textContent = "Click Save to use it."; } });
-      pick.addEventListener("click", async () => {
-        const chosen = await pickPicture(`Choose a picture for flyer ${slot}`);
-        if (!chosen) return;
-        src = chosen; file.value = ""; setPreview(show(chosen));
-        msg.className = "msg"; msg.textContent = "Click Save to use it.";
+    ["left", "right"].forEach((side) => {
+      const pile = pileOf(side);
+      const add = el("button", {}, "+ Add a flyer");
+      const col = el("div", { class: "pile" },
+        el("h3", {}, `${sideName(side)} pile `, el("span", { class: "hint" }, pile.length ? "· top of the pile first" : "· empty")),
+        add);
+      add.addEventListener("click", () => {
+        add.after(flyerCard({ id: 0, side, src: "", alt: "Upcoming show flyer", stamp: "", visible: true }, 0, 0, () => { add.disabled = false; }));
+        add.disabled = true;
       });
-      save.addEventListener("click", async () => {
-        save.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
-        try {
-          if (file.files[0]) { msg.textContent = "Uploading picture…"; src = await upload(file.files[0], "flyer"); }
-          const d = await api(`/api/admin/flyers/${slot}`, { method: "PUT", json: { src, alt: alt.value, stamp: stamp.value, visible: vis.checked } });
-          renderFlyers(d.flyers); toast(`Flyer ${slot} saved`);
-        } catch (e) { msg.className = "msg err"; msg.textContent = e.message; save.disabled = false; }
-      });
-      box.append(el("div", { class: "card flyer" },
-        el("h3", { style: "margin:0 0 10px" }, `Flyer ${slot} ` , el("span", { class: "hint", style: "font-weight:400" }, slot === 1 ? "(left)" : "(right)")),
-        preview,
-        el("label", {}, "Replace picture"), file, el("div", { class: "or" }, "or"), pick,
-        el("label", {}, "Description (for screen readers)"), alt,
-        el("label", {}, "Stamp text"), stamp,
-        el("label", { class: "check" }, vis, "Show this flyer on the site"),
-        el("div", { class: "row" }, save, msg)));
+      pile.forEach((f, i) => col.append(flyerCard(f, i, pile.length)));
+      box.append(col);
     });
+  }
+  // One flyer's card. A new flyer (id 0) is added on top of its pile when saved.
+  function flyerCard(f, i, n, onCancel) {
+    const isNew = !f.id;
+    let src = f.src;
+    let preview = src ? el("img", { src: show(src), alt: f.alt }) : el("div", { class: "noimg" }, "No picture yet");
+    const setPreview = (url) => { const img = el("img", { src: url }); preview.replaceWith(img); preview = img; };
+    const pick = el("button", {}, "Choose an uploaded picture…");
+    const file = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp" });
+    const alt = el("input", { type: "text", value: f.alt, maxLength: 200 });
+    const stamp = el("input", { type: "text", value: f.stamp, maxLength: 20, placeholder: "e.g. ROCKED!  (leave blank for no stamp)" });
+    const vis = el("input", { type: "checkbox", checked: f.visible });
+    const msg = el("span", { class: "msg" });
+    const save = el("button", { class: "primary" }, isNew ? "Add flyer" : "Save");
+    file.addEventListener("change", () => { if (file.files[0]) { setPreview(URL.createObjectURL(file.files[0])); msg.className = "msg"; msg.textContent = "Click " + save.textContent + " to use it."; } });
+    pick.addEventListener("click", async () => {
+      const chosen = await pickPicture(`Choose a picture for this flyer`);
+      if (!chosen) return;
+      src = chosen; file.value = ""; setPreview(show(chosen));
+      msg.className = "msg"; msg.textContent = "Click " + save.textContent + " to use it.";
+    });
+    save.addEventListener("click", async () => {
+      save.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
+      try {
+        if (file.files[0]) { msg.textContent = "Uploading picture…"; src = await upload(file.files[0], "flyer"); file.value = ""; }
+        if (!src) throw new Error("Choose a picture first.");
+        const body = { src, alt: alt.value, stamp: stamp.value, visible: vis.checked };
+        const d = isNew
+          ? await api("/api/admin/flyers", { method: "POST", json: { ...body, side: f.side } })
+          : await api(`/api/admin/flyers/${f.id}`, { method: "PUT", json: body });
+        renderFlyers(d.flyers); toast(isNew ? `Added to the top of the ${f.side} pile` : "Flyer saved");
+      } catch (e) { msg.className = "msg err"; msg.textContent = e.message; save.disabled = false; }
+    });
+
+    const tools = el("div", { class: "row" });
+    if (isNew) {
+      const cancel = el("button", {}, "Cancel");
+      cancel.addEventListener("click", () => { card.remove(); if (onCancel) onCancel(); });
+      tools.append(cancel);
+    } else {
+      const ids = (side) => pileOf(side).map((x) => x.id);
+      const other = f.side === "left" ? "right" : "left";
+      const withSides = (mine, theirs) => (f.side === "left" ? [mine, theirs] : [theirs, mine]);
+      const up = el("button", { title: "Bring forward (toward the top of the pile)", disabled: i === 0 }, "↑ Up");
+      const down = el("button", { title: "Send back (toward the bottom of the pile)", disabled: i === n - 1 }, "↓ Down");
+      const move = el("button", { title: `Put it on top of the ${other} pile` }, f.side === "left" ? "Move to right pile →" : "← Move to left pile");
+      const del = el("button", { class: "danger", title: "Take this flyer off (the picture stays in your uploaded pictures)" }, "Remove");
+      const restack = (to) => { const a = ids(f.side); a.splice(i, 1); a.splice(to, 0, f.id); saveFlyerOrder(...withSides(a, ids(other))); };
+      up.addEventListener("click", () => restack(i - 1));
+      down.addEventListener("click", () => restack(i + 1));
+      move.addEventListener("click", () => saveFlyerOrder(...withSides(ids(f.side).filter((x) => x !== f.id), [f.id, ...ids(other)]), `Moved to the ${other} pile`));
+      del.addEventListener("click", async () => {
+        if (!confirm("Take this flyer off?\n\nThe picture stays in your uploaded pictures, so you can use it again.\nTo keep it here but off the site, untick \"Show this flyer on the site\" instead.")) return;
+        try { const d = await api(`/api/admin/flyers/${f.id}`, { method: "DELETE" }); renderFlyers(d.flyers); toast("Flyer removed"); } catch (e) { toast(e.message); }
+      });
+      tools.append(up, down, move, del);
+    }
+
+    const title = isNew ? "New flyer (goes on top)" : i === 0 ? "#1 · top of the pile" : `#${i + 1}`;
+    const card = el("div", { class: "card flyer" + (isNew ? " is-new" : "") + (f.visible ? "" : " is-hidden") },
+      el("h4", {}, title, f.visible ? "" : el("span", { class: "hint" }, " · hidden")),
+      preview,
+      el("label", {}, isNew ? "Picture" : "Replace picture"), file, el("div", { class: "or" }, "or"), pick,
+      el("label", {}, "Description (for screen readers)"), alt,
+      el("label", {}, "Stamp text"), stamp,
+      el("label", { class: "check" }, vis, "Show this flyer on the site"),
+      el("div", { class: "row" }, save, msg),
+      tools);
+    return card;
   }
 
   // ---------- gallery ----------

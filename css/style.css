@@ -228,13 +228,17 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
 .btn-outline:hover{border-color:var(--red);color:var(--red-glow);transform:translateY(-2px);}
 .btn-lg{padding:16px 34px;font-size:1.05rem;}
 
+/* Show flyers sit in two piles (left and right). Each flyer's angle (--r), hover tilt (--rh) and offset (--x, --y)
+   are set by the server (worker/media.js): the top flyer sits straight in place, the ones under it peek out. */
 .next-show{
   position:relative;z-index:2;display:block;
-  width:170px;margin:56px auto 0;
-  transform:rotate(-15deg);
+  width:100%;margin:0;
+  transform:translate(var(--x,0%),var(--y,0%)) rotate(var(--r,-15deg));
   transition:transform .25s ease;
 }
-.next-show:hover{transform:rotate(-10deg) scale(1.04);}
+.next-show:hover{transform:translate(var(--x,0%),var(--y,0%)) rotate(calc(var(--r,-15deg) + var(--rh,5deg))) scale(1.04);}
+.flyer-pile{position:relative;z-index:2;width:150px;}
+.flyer-pile .next-show:not(.is-top){position:absolute;top:0;left:0;}
 /* Red ink "ROCKED!" stamp slapped across the flyer. Sized in container units so it scales with the flyer. */
 .next-show{container-type:inline-size;}
 .next-show-stamp{
@@ -248,14 +252,11 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
   filter:url(#stamp-rough) drop-shadow(0 0 .04em rgba(255,244,228,.95));
   pointer-events:none;user-select:none;
 }
-.next-show-right{transform:rotate(15deg);}
-.next-show-right:hover{transform:rotate(10deg) scale(1.04);}
-/* Mobile/tablet: flyers sit side by side under the buttons. */
+/* Mobile/tablet: the two piles sit side by side under the buttons. */
 .next-shows{
   display:flex;justify-content:center;align-items:flex-start;gap:28px;
   margin:56px auto 0;
 }
-.next-shows .next-show{margin:0;width:150px;}
 .next-show-img{
   display:block;width:100%;
   border:6px solid #f4f1e8;
@@ -273,12 +274,12 @@ h1,h2,h3{font-family:var(--font-display);letter-spacing:.03em;margin:0 0 .4em;}
      covering the hero text and buttons: they shrink as the window narrows
      (and on short windows) and reach full size (480px) on large screens.
      The tilted flyers take up ~1.3x their width, hence the 35vw maths. */
-  .next-shows .next-show{
+  .next-shows .flyer-pile{
     position:absolute;
     left:4.5%;bottom:18%;
     width:clamp(150px,min(calc(35vw - 240px),62vh),480px);margin:0;
   }
-  .next-shows .next-show-right{left:auto;right:4.5%;}
+  .next-shows .flyer-pile-right{left:auto;right:4.5%;}
 }
 @media (max-width:1099px){
   .hero{justify-content:flex-start;min-height:auto;padding:140px 24px 110px;}

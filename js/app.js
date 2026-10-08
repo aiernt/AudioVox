@@ -281,28 +281,6 @@ if (galleryWrapper) {
   });
 }
 
-// Flyers: use the admin page's settings (picture, stamp, shown/hidden) for flyer 1 (left) and 2 (right).
-siteMedia.then((d) => {
-  if (!d || !Array.isArray(d.flyers)) return;
-  [["next-show", "next-show-img", 1], ["next-show-2", "next-show-img-2", 2]].forEach(([boxId, imgId, slot]) => {
-    const box = document.getElementById(boxId), img = document.getElementById(imgId);
-    if (!box || !img) return;
-    const f = d.flyers.find((x) => x.slot === slot);
-    if (!f) { box.remove(); return; }                   // hidden in the admin page
-    img.src = f.src;
-    img.alt = f.alt || "Upcoming show flyer";
-    let stamp = box.querySelector(".next-show-stamp");
-    if (f.stamp) {
-      img.dataset.stamp = f.stamp;
-      if (!stamp) { stamp = document.createElement("span"); stamp.className = "next-show-stamp"; stamp.setAttribute("aria-hidden", "true"); box.appendChild(stamp); }
-      stamp.textContent = f.stamp;
-    } else {
-      delete img.dataset.stamp;
-      if (stamp) stamp.remove();
-    }
-  });
-});
-
 // ---------- Lightbox ----------
 const lightbox = document.getElementById("lightbox");
 const lightboxImg = document.getElementById("lightbox-img");
@@ -364,6 +342,8 @@ function openLightbox(img) {
   ).filter(
     (el) => (el.dataset.lightboxGroup || "") === group && !el.closest(".swiper-slide-duplicate")
   );
+  // Flyers carry their viewing order (left pile top to bottom, then the right pile); everything else keeps page order.
+  lightboxPhotos.sort((a, b) => Number(a.dataset.order || 0) - Number(b.dataset.order || 0));
   const startIndex = lightboxPhotos.indexOf(img);
   const hasMultiple = lightboxPhotos.length > 1;
   lightboxPrev.hidden = !hasMultiple;
@@ -469,19 +449,26 @@ if (memberModal) {
   });
 }
 
-// ---------- Next show flyer ----------
-// Drop a poster into images/flyer.jpg to promote the next gig on the
-// hero. If it's missing, the whole tilted/taped flyer just doesn't render.
-const nextShow = document.getElementById("next-show");
-const nextShowImg = document.getElementById("next-show-img");
-if (nextShow && nextShowImg) {
-  nextShowImg.addEventListener("error", () => nextShow.remove());
+// ---------- Show flyers ----------
+// The flyer piles are set in the admin page (the server builds them into the page). If a flyer's picture
+// can't load, that flyer is dropped; the next one down becomes the top of its pile.
+function dropBrokenFlyer(img) {
+  const box = img.closest(".next-show"), pile = img.closest(".flyer-pile");
+  if (!box) return;
+  box.remove();
+  if (!pile) return;
+  const rest = pile.querySelectorAll(".next-show");
+  if (!rest.length) { pile.remove(); return; }
+  if (!pile.querySelector(".is-top")) {
+    const top = rest[rest.length - 1];   // the last one in the page is the top of the pile
+    top.classList.add("is-top");
+    top.style.setProperty("--x", "0%"); top.style.setProperty("--y", "0%");
+  }
 }
-const nextShow2 = document.getElementById("next-show-2");
-const nextShowImg2 = document.getElementById("next-show-img-2");
-if (nextShow2 && nextShowImg2) {
-  nextShowImg2.addEventListener("error", () => nextShow2.remove());
-}
+document.querySelectorAll(".next-show-img").forEach((img) => {
+  if (img.complete && !img.naturalWidth) dropBrokenFlyer(img);
+  else img.addEventListener("error", () => dropBrokenFlyer(img));
+});
 
 // ---------- Upcoming shows (Google Calendar API) ----------
 // Read-only fetch of the band's public Google Calendar. The key is visible in

@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Anton+SC&family=Permanent+Marker&family=Oswald:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
-<link rel="stylesheet" href="css/style.css?v=51">
+<link rel="stylesheet" href="css/style.css?v=52">
 </head>
 <body>
 <!-- Distress filter for the AudioVox wordmark -->
@@ -65,32 +65,23 @@
         <a href="#shows" class="btn btn-outline">Upcoming Shows</a>
       </div>
     </div>
-    <div class="next-shows">
-      <div class="next-show" id="next-show">
-        <span class="next-show-tape"></span>
-        <img
-          src="images/flyer.jpg"
-          alt="Upcoming show flyer"
-          class="next-show-img lightbox-trigger"
-          id="next-show-img"
-          data-stamp="ROCKED!"
-          data-lightbox-group="flyer"
-          data-cta-href="#shows"
-          data-cta-label="See Upcoming Shows"
-        >
-        <span class="next-show-stamp" aria-hidden="true">ROCKED!</span>
+    <!-- Flyer piles. The server replaces these with the flyers set in the admin page (worker/media.js, flyerPilesHtml);
+         these two are only shown if that can't be read. -->
+    <div class="next-shows" id="next-shows">
+      <div class="flyer-pile flyer-pile-left">
+        <div class="next-show is-top" style="--r:-15deg;--rh:5deg;--x:0%;--y:0%;z-index:1">
+          <span class="next-show-tape"></span>
+          <img src="images/flyer.jpg" alt="Upcoming show flyer" class="next-show-img lightbox-trigger"
+            data-lightbox-group="flyer" data-order="0" data-stamp="ROCKED!" data-cta-href="#shows" data-cta-label="See Upcoming Shows">
+          <span class="next-show-stamp" aria-hidden="true">ROCKED!</span>
+        </div>
       </div>
-      <div class="next-show next-show-right" id="next-show-2">
-        <span class="next-show-tape"></span>
-        <img
-          src="images/flyer2.jpg"
-          alt="Upcoming show flyer"
-          class="next-show-img lightbox-trigger"
-          id="next-show-img-2"
-          data-lightbox-group="flyer"
-          data-cta-href="#shows"
-          data-cta-label="See Upcoming Shows"
-        >
+      <div class="flyer-pile flyer-pile-right">
+        <div class="next-show is-top" style="--r:15deg;--rh:-5deg;--x:0%;--y:0%;z-index:1">
+          <span class="next-show-tape"></span>
+          <img src="images/flyer2.jpg" alt="Upcoming show flyer" class="next-show-img lightbox-trigger"
+            data-lightbox-group="flyer" data-order="1" data-cta-href="#shows" data-cta-label="See Upcoming Shows">
+        </div>
       </div>
     </div>
     <a href="#about" class="scroll-cue" aria-label="Scroll down"><span></span></a>
@@ -385,6 +376,6 @@
 <a href="#top" id="back-to-top" class="back-to-top" aria-label="Back to top"></a>
 
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-<script src="js/app.js?v=26"></script>
+<script src="js/app.js?v=27"></script>
 </body>
 </html>

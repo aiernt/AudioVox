@@ -1,13 +1,19 @@
-// Site photos managed from the admin page (admin.html): the two hero flyers and the gallery.
+// Site photos managed from the admin page (admin.html): the hero flyers and the gallery.
 //
 // Settings live in the D1 database (binding "DB"); uploaded image files live in the R2 bucket (binding "MEDIA")
 // and are served from /media/<file>. The original photos in /images keep working: the database just points at them.
+//
+// Flyers sit in two piles on the home page, left and right. Each flyer has a side and a stacking number (z):
+// the highest z is the top of the pile (in front); the ones under it peek out behind at other angles.
 //
 //   GET    /api/media                       public: { flyers: [...], gallery: [...] } for the home page
 //   GET    /media/<key>                     public: an uploaded image
 //   -- admin only (Cloudflare Access login, or "Authorization: Bearer <ADMIN_TOKEN>" for local testing):
 //   POST   /api/admin/upload?kind=...       upload one image (the page shrinks it first); returns its address
-//   PUT    /api/admin/flyers/:slot          { src, alt, stamp, visible }  update flyer 1 or 2
+//   POST   /api/admin/flyers                { src, alt, stamp, visible, side }  add a flyer (goes on top of that pile)
+//   PUT    /api/admin/flyers/:id            { src, alt, stamp, visible }  edit a flyer
+//   DELETE /api/admin/flyers/:id                                    take a flyer off (the picture stays in the library)
+//   PUT    /api/admin/flyer-order           { left: [ids], right: [ids] }  both piles, top first
 //   POST   /api/admin/gallery               { src, alt, caption }  add a photo (goes to the end)
 //   PUT    /api/admin/gallery/:id           { alt, caption } and/or { visible }   edit a photo's text / show or hide it
 //   PUT    /api/admin/gallery-order         { ids: [...] }          new order
@@ -28,9 +34,10 @@ const clean = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u001F\u00
 
 // The starting content: today's photos, so nothing disappears when the site switches over.
 const START_FLYERS = [
-  { slot: 1, src: "images/flyer.jpg", alt: "Upcoming show flyer", stamp: "ROCKED!", visible: 1 },
-  { slot: 2, src: "images/flyer2.jpg", alt: "Upcoming show flyer", stamp: "", visible: 1 },
+  { slot: 1, src: "images/flyer.jpg", alt: "Upcoming show flyer", stamp: "ROCKED!", visible: 1, side: "left" },
+  { slot: 2, src: "images/flyer2.jpg", alt: "Upcoming show flyer", stamp: "", visible: 1, side: "right" },
 ];
+const MAX_FLYERS_PER_SIDE = 10;
 const START_GALLERY = Array.from({ length: 33 }, (_, i) => `images/gallery/gallery-${i + 1}.jpg`);
 
 let ready = null;
@@ -40,7 +47,8 @@ function ensureSchema(db) {
       await db.batch([
         db.prepare(`CREATE TABLE IF NOT EXISTS site_flyers (
           slot INTEGER PRIMARY KEY, src TEXT NOT NULL DEFAULT '', alt TEXT NOT NULL DEFAULT '',
-          stamp TEXT NOT NULL DEFAULT '', visible INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL DEFAULT 0)`),
+          stamp TEXT NOT NULL DEFAULT '', visible INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL DEFAULT 0,
+          side TEXT NOT NULL DEFAULT 'left', z INTEGER NOT NULL DEFAULT 0)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS site_gallery (
           id INTEGER PRIMARY KEY AUTOINCREMENT, src TEXT NOT NULL, alt TEXT NOT NULL DEFAULT '',
           caption TEXT NOT NULL DEFAULT '', sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
@@ -51,13 +59,22 @@ function ensureSchema(db) {
       if (!cols.some((c) => c.name === "visible")) {
         await db.prepare("ALTER TABLE site_gallery ADD COLUMN visible INTEGER NOT NULL DEFAULT 1").run();
       }
+      // Added later: flyers in two piles. The original flyer 1 is the left pile, flyer 2 the right.
+      const fcols = (await db.prepare("PRAGMA table_info(site_flyers)").all()).results;
+      if (!fcols.some((c) => c.name === "side")) {
+        await db.batch([
+          db.prepare("ALTER TABLE site_flyers ADD COLUMN side TEXT NOT NULL DEFAULT 'left'"),
+          db.prepare("ALTER TABLE site_flyers ADD COLUMN z INTEGER NOT NULL DEFAULT 0"),
+          db.prepare("UPDATE site_flyers SET side = CASE WHEN slot = 2 THEN 'right' ELSE 'left' END, z = 1"),
+        ]);
+      }
       // Copy today's flyers and gallery in once, ever (never again, even if every photo is later removed).
       const seeded = await db.prepare("SELECT v FROM song_settings WHERE k = 'media_seeded'").first();
       if (!seeded) {
         const now = Date.now();
         await db.batch([
-          ...START_FLYERS.map((f) => db.prepare("INSERT OR IGNORE INTO site_flyers (slot, src, alt, stamp, visible, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-            .bind(f.slot, f.src, f.alt, f.stamp, f.visible, now)),
+          ...START_FLYERS.map((f) => db.prepare("INSERT OR IGNORE INTO site_flyers (slot, src, alt, stamp, visible, updated_at, side, z) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1)")
+            .bind(f.slot, f.src, f.alt, f.stamp, f.visible, now, f.side)),
           ...START_GALLERY.map((src, i) => db.prepare("INSERT INTO site_gallery (src, alt, caption, sort, created_at) VALUES (?1, '', '', ?2, ?3)").bind(src, i + 1, now)),
           db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('media_seeded', ?1)").bind(String(now)),
         ]);
@@ -68,7 +85,8 @@ function ensureSchema(db) {
 }
 
 async function state(db) {
-  const flyers = (await db.prepare("SELECT slot, src, alt, stamp, visible FROM site_flyers ORDER BY slot").all()).results
+  // Left pile then right pile, each from the top (front) down.
+  const flyers = (await db.prepare("SELECT slot AS id, src, alt, stamp, visible, side, z FROM site_flyers ORDER BY side, z DESC, slot").all()).results
     .map((f) => ({ ...f, visible: !!f.visible }));
   const gallery = (await db.prepare("SELECT id, src, alt, caption, visible FROM site_gallery ORDER BY sort, id").all()).results
     .map((g) => ({ ...g, visible: !!g.visible }));
@@ -157,7 +175,7 @@ export async function handleMedia(request, env, ctx) {
       const s = await state(db);
       return json({
         ok: true,
-        flyers: s.flyers.filter((f) => f.visible && f.src),
+        flyers: s.flyers.filter((f) => f.visible && f.src).map(({ id, src, alt, stamp, side }) => ({ id, src, alt, stamp, side })),
         gallery: s.gallery.filter((g) => g.visible).map(({ id, src, alt, caption }) => ({ id, src, alt, caption })),
       });
     }
@@ -211,16 +229,47 @@ export async function handleMedia(request, env, ctx) {
       return json({ ok: true });
     }
 
-    // Flyers 1 and 2
-    if (parts[0] === "flyers" && parts.length === 2 && method === "PUT") {
-      const slot = Number(parts[1]);
-      if (slot !== 1 && slot !== 2) return json({ ok: false, error: "Not found" }, 404);
+    // Flyers: add (on top of its pile)
+    if (parts[0] === "flyers" && parts.length === 1 && method === "POST") {
       let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
       const src = clean(d.src, 300);
-      if (src && !okSrc(src)) return json({ ok: false, error: "That image address isn't allowed." }, 400);
-      await db.prepare(`INSERT INTO site_flyers (slot, src, alt, stamp, visible, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-        ON CONFLICT (slot) DO UPDATE SET src = ?2, alt = ?3, stamp = ?4, visible = ?5, updated_at = ?6`)
-        .bind(slot, src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible ? 1 : 0, Date.now()).run();
+      if (!okSrc(src)) return json({ ok: false, error: "Choose a picture for the flyer first." }, 400);
+      const side = d.side === "right" ? "right" : "left";
+      const { n, m } = await db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(z), 0) AS m FROM site_flyers WHERE side = ?1").bind(side).first();
+      if (n >= MAX_FLYERS_PER_SIDE) return json({ ok: false, error: `That pile is full (${MAX_FLYERS_PER_SIDE} flyers). Remove one first.` }, 400);
+      await db.prepare("INSERT INTO site_flyers (src, alt, stamp, visible, updated_at, side, z) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+        .bind(src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible === false ? 0 : 1, Date.now(), side, m + 1).run();
+      return json({ ok: true, ...(await state(db)) });
+    }
+    // Flyers: edit / take off
+    if (parts[0] === "flyers" && parts.length === 2) {
+      const id = Number(parts[1]);
+      if (!Number.isInteger(id) || id < 1 || !(await db.prepare("SELECT 1 FROM site_flyers WHERE slot = ?1").bind(id).first())) {
+        return json({ ok: false, error: "That flyer isn't there any more. Reload the page." }, 404);
+      }
+      if (method === "PUT") {
+        let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+        const src = clean(d.src, 300);
+        if (!okSrc(src)) return json({ ok: false, error: "Choose a picture for the flyer first." }, 400);
+        await db.prepare("UPDATE site_flyers SET src = ?1, alt = ?2, stamp = ?3, visible = ?4, updated_at = ?5 WHERE slot = ?6")
+          .bind(src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible ? 1 : 0, Date.now(), id).run();
+        return json({ ok: true, ...(await state(db)) });
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM site_flyers WHERE slot = ?1").bind(id).run();   // the picture stays in the library
+        return json({ ok: true, ...(await state(db)) });
+      }
+    }
+    // Flyers: restack both piles (also moves a flyer from one pile to the other). Lists are top first.
+    if (parts[0] === "flyer-order" && method === "PUT") {
+      let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+      const ids = (v) => (Array.isArray(v) ? v.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, MAX_FLYERS_PER_SIDE) : []);
+      const left = ids(d.left), right = ids(d.right);
+      const stmts = [];
+      [["left", left], ["right", right]].forEach(([side, list]) => list.forEach((id, i) => {
+        stmts.push(db.prepare("UPDATE site_flyers SET side = ?1, z = ?2 WHERE slot = ?3").bind(side, list.length - i, id));
+      }));
+      if (stmts.length) await db.batch(stmts);
       return json({ ok: true, ...(await state(db)) });
     }
 
@@ -272,10 +321,42 @@ export async function handleMedia(request, env, ctx) {
   }
 }
 
-// The home page (/) with the admin page's flyer settings already applied, so a hidden flyer is never sent and
-// never flashes on screen before the page's script catches up. If the database can't be read, the page is sent
-// as-is and the script in app.js applies the settings instead.
-const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+// The home page (/) with the flyer piles built in, so a hidden flyer is never sent and nothing flashes on screen.
+// If the database can't be read, the page is sent as-is (with the two original flyers that are written into index.html).
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+// Where each flyer in a pile sits, by depth (0 = top of the pile). Angles and offsets are for the left pile;
+// the right pile is the mirror image. Offsets are a share of the flyer's own size, and push the flyers underneath
+// outwards and upwards so they peek out without covering the hero text. Deeper than this, the pattern repeats.
+const PILE_SPOTS = [
+  { r: -15, x: 0, y: 0 },
+  { r: -3, x: -13, y: -15 },
+  { r: -29, x: -17, y: -4 },
+  { r: 5, x: -5, y: -23 },
+  { r: -35, x: -21, y: -14 },
+];
+function flyerPilesHtml(flyers) {
+  let order = 0;   // the order the full-size viewer goes through them: left pile top to bottom, then the right pile
+  return ["left", "right"].map((side) => {
+    const pile = flyers.filter((f) => f.side === side && f.visible && f.src);   // already top first
+    if (!pile.length) return "";
+    const mirror = side === "right" ? -1 : 1;
+    const boxes = pile.map((f, depth) => {
+      const spot = depth === 0 ? PILE_SPOTS[0] : PILE_SPOTS[1 + ((depth - 1) % (PILE_SPOTS.length - 1))];
+      const r = spot.r * mirror, x = spot.x * mirror;
+      const style = `--r:${r}deg;--rh:${r < 0 ? 5 : -5}deg;--x:${x}%;--y:${spot.y}%;z-index:${pile.length - depth}`;
+      const stamp = f.stamp ? ` data-stamp="${escapeHtml(f.stamp)}"` : "";
+      return `<div class="next-show${depth === 0 ? " is-top" : ""}" style="${style}">` +
+        `<span class="next-show-tape"></span>` +
+        `<img src="${escapeHtml(f.src)}" alt="${escapeHtml(f.alt || "Upcoming show flyer")}" class="next-show-img lightbox-trigger"` +
+        ` data-lightbox-group="flyer" data-order="${order++}"${stamp} data-cta-href="#shows" data-cta-label="See Upcoming Shows">` +
+        (f.stamp ? `<span class="next-show-stamp" aria-hidden="true">${escapeHtml(f.stamp)}</span>` : "") +
+        `</div>`;
+    });
+    // Bottom of the pile first in the page, so each flyer is drawn over the ones beneath it.
+    return `<div class="flyer-pile flyer-pile-${side}">${boxes.reverse().join("")}</div>`;
+  }).join("");
+}
 export async function homePage(request, env) {
   // Ask for the full file every time (no "has it changed?" check), since what we send depends on the settings.
   const headers = new Headers(request.headers);
@@ -293,30 +374,10 @@ export async function homePage(request, env) {
     return page;
   }
 
-  let rewriter = new HTMLRewriter();
-  [["next-show", "next-show-img", 1], ["next-show-2", "next-show-img-2", 2]].forEach(([boxId, imgId, slot]) => {
-    const f = flyers.find((x) => x.slot === slot);
-    if (!f || !f.visible || !f.src) {
-      rewriter = rewriter.on(`#${boxId}`, { element: (el) => el.remove() });
-      return;
-    }
-    rewriter = rewriter
-      .on(`#${imgId}`, {
-        element: (el) => {
-          el.setAttribute("src", f.src);
-          el.setAttribute("alt", f.alt || "Upcoming show flyer");
-          if (f.stamp) el.setAttribute("data-stamp", f.stamp); else el.removeAttribute("data-stamp");
-        },
-      })
-      .on(`#${boxId} .next-show-stamp`, { element: (el) => el.remove() })
-      .on(`#${boxId}`, {
-        element: (el) => {
-          if (f.stamp) el.append(`<span class="next-show-stamp" aria-hidden="true">${escapeHtml(f.stamp)}</span>`, { html: true });
-        },
-      });
-  });
-
-  const out = rewriter.transform(page);
+  const piles = flyerPilesHtml(flyers);
+  const out = new HTMLRewriter()
+    .on("#next-shows", { element: (el) => { el.setInnerContent(piles, { html: true }); } })
+    .transform(page);
   const res = new Response(out.body, out);
   res.headers.delete("ETag");
   res.headers.set("Cache-Control", "no-cache");
