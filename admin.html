@@ -68,6 +68,8 @@
   .picker-grid{overflow:auto;overscroll-behavior:contain;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
   .pitem{border:1px solid var(--line);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);}
   .pitem img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;background:#eee;}
+  .pitem.can-pick{cursor:pointer;user-select:none;}
+  .pitem.can-pick:hover{border-color:var(--red);}
   .pitem .row{margin-top:2px;gap:6px;}
   .pitem button{padding:4px 9px;font-size:.82rem;}
 </style>
@@ -174,10 +176,13 @@
             };
             buttons.append(del);
           }
-          grid.append(el("div", { class: "pitem" },
+          const item = el("div", { class: "pitem" + (inGallery ? "" : " can-pick"), title: inGallery ? "" : "Double-click to use this picture" },
             el("img", { src: show(f.src), alt: "", loading: "lazy" }),
             el("span", {}, used.length ? "Used: " + used.join(", ") : f.builtIn ? "Built-in photo · not used" : "Not used"),
-            buttons));
+            buttons);
+          // Double-clicking a picture picks it, same as "Use this" (but not on its buttons)
+          if (!inGallery) item.addEventListener("dblclick", (e) => { if (!e.target.closest("button")) close(f.src); });
+          grid.append(item);
         });
       };
       api("/api/admin/library").then((d) => { files = d.files; draw(); }).catch((e) => grid.replaceChildren(el("p", { class: "msg err" }, e.message)));
