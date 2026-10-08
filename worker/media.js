@@ -11,7 +11,9 @@
 //   POST   /api/admin/gallery               { src, alt, caption }  add a photo (goes to the end)
 //   PUT    /api/admin/gallery/:id           { alt, caption } and/or { visible }   edit a photo's text / show or hide it
 //   PUT    /api/admin/gallery-order         { ids: [...] }          new order
-//   DELETE /api/admin/gallery/:id                                   remove a photo
+//   DELETE /api/admin/gallery/:id                                   take a photo out of the gallery (the picture stays in the library)
+//   GET    /api/admin/library                                       every picture that can be reused (uploads + built-in photos)
+//   DELETE /api/admin/library?src=/media/...                        delete an unused upload for good
 //
 // Admin access is checked here too (not only by Cloudflare Access), so the admin API can't be reached any other way.
 // Settings: ACCESS_TEAM_DOMAIN (e.g. "audiovox.cloudflareaccess.com") and ACCESS_AUD (the Access application's
@@ -184,6 +186,31 @@ export async function handleMedia(request, env, ctx) {
       return json({ ok: true, src: `/media/${key}` });
     }
 
+    // The picture library, for reusing a picture: every upload (newest first) plus the photos built into the site.
+    if (parts[0] === "library" && parts.length === 1 && method === "GET") {
+      const files = [];
+      if (env.MEDIA) {
+        let cursor;
+        do {
+          const page = await env.MEDIA.list({ cursor, limit: 1000 });
+          for (const o of page.objects) files.push({ src: `/media/${o.key}`, uploaded: o.uploaded ? new Date(o.uploaded).getTime() : 0 });
+          cursor = page.truncated ? page.cursor : undefined;
+        } while (cursor && files.length < 5000);
+        files.sort((a, b) => b.uploaded - a.uploaded);
+      }
+      const builtIn = [...new Set([...START_FLYERS.map((f) => f.src), ...START_GALLERY])].map((src) => ({ src, builtIn: true }));
+      return json({ ok: true, files: [...files.filter((f) => okSrc(f.src)), ...builtIn] });
+    }
+    // Delete an uploaded picture for good (only when no flyer or gallery photo uses it; built-in photos can't be deleted).
+    if (parts[0] === "library" && parts.length === 1 && method === "DELETE") {
+      const src = clean(url.searchParams.get("src"), 300);
+      if (!src.startsWith("/media/") || !okSrc(src)) return json({ ok: false, error: "Only uploaded pictures can be deleted." }, 400);
+      const { n } = await db.prepare("SELECT (SELECT COUNT(*) FROM site_gallery WHERE src = ?1) + (SELECT COUNT(*) FROM site_flyers WHERE src = ?1) AS n").bind(src).first();
+      if (n) return json({ ok: false, error: "That picture is still being used. Take it out of the gallery or flyer first." }, 409);
+      if (env.MEDIA) await env.MEDIA.delete(src.slice("/media/".length));
+      return json({ ok: true });
+    }
+
     // Flyers 1 and 2
     if (parts[0] === "flyers" && parts.length === 2 && method === "PUT") {
       const slot = Number(parts[1]);
@@ -202,6 +229,7 @@ export async function handleMedia(request, env, ctx) {
       let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
       const src = clean(d.src, 300);
       if (!okSrc(src)) return json({ ok: false, error: "That image address isn't allowed." }, 400);
+      if (await db.prepare("SELECT 1 FROM site_gallery WHERE src = ?1").bind(src).first()) return json({ ok: false, error: "That picture is already in the gallery." }, 409);
       const { m } = await db.prepare("SELECT COALESCE(MAX(sort), 0) AS m FROM site_gallery").first();
       await db.prepare("INSERT INTO site_gallery (src, alt, caption, sort, created_at) VALUES (?1, ?2, ?3, ?4, ?5)")
         .bind(src, clean(d.alt, 200), clean(d.caption, 300), m + 1, Date.now()).run();
@@ -230,9 +258,9 @@ export async function handleMedia(request, env, ctx) {
         return json({ ok: true, ...(await state(db)) });
       }
       if (method === "DELETE") {
+        // Only takes it out of the gallery: the picture stays in the library so it can be used again
+        // (it's deleted for good from the library, DELETE /api/admin/library).
         await db.prepare("DELETE FROM site_gallery WHERE id = ?1").bind(id).run();
-        // An uploaded file is deleted from storage too (the original site photos in /images are left alone).
-        if (env.MEDIA && row.src.startsWith("/media/")) ctx.waitUntil(env.MEDIA.delete(row.src.slice("/media/".length)).catch(() => {}));
         return json({ ok: true, ...(await state(db)) });
       }
     }

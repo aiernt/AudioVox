@@ -48,6 +48,17 @@
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d1d1f;color:#fff;padding:10px 16px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;}
   #toast.on{opacity:1;}
   .denied{max-width:560px;margin:60px auto;}
+  .or{color:var(--muted);font-size:.85rem;margin:6px 0;}
+  /* picture library (pick a picture that's already uploaded) */
+  .picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20;}
+  .picker[hidden]{display:none;}
+  .picker-box{background:#fff;border-radius:8px;width:min(1000px,100%);max-height:90vh;display:flex;flex-direction:column;}
+  .picker-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);}
+  .picker-grid{overflow:auto;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+  .pitem{border:1px solid var(--line);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);}
+  .pitem img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;background:#eee;}
+  .pitem .row{margin-top:2px;gap:6px;}
+  .pitem button{padding:4px 9px;font-size:.82rem;}
 </style>
 </head>
 <body>
@@ -66,11 +77,19 @@
   <div class="card upload">
     <input type="file" id="g-files" accept="image/jpeg,image/png,image/webp" multiple>
     <button class="primary" id="g-upload">Upload photos</button>
+    <span class="or">or</span>
+    <button id="g-pick">Add from uploaded pictures&hellip;</button>
     <span class="msg" id="g-msg"></span>
   </div>
   <ul class="gallery" id="gallery"></ul>
 </main>
 <div class="denied card" id="denied" hidden></div>
+<div class="picker" id="picker" hidden>
+  <div class="picker-box" role="dialog" aria-modal="true" aria-labelledby="picker-title">
+    <div class="picker-head"><b id="picker-title">Choose a picture</b><button id="picker-close">Close</button></div>
+    <div class="picker-grid" id="picker-grid"></div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -106,20 +125,77 @@
   }
   const show = (src) => (src.startsWith("/") ? src : "/" + src);
 
+  // ---------- picture library: reuse a picture that's already uploaded (or built into the site) ----------
+  let flyersNow = [];
+  function usedBy(src) {
+    const u = flyersNow.filter((f) => f.src === src).map((f) => `Flyer ${f.slot}`);
+    const gi = gallery.findIndex((g) => g.src === src);
+    if (gi >= 0) u.push(`Gallery #${gi + 1}${gallery[gi].visible ? "" : " (hidden)"}`);
+    return u;
+  }
+  // Opens the library; resolves with the chosen picture's address, or null if closed.
+  function pickPicture(title, { forGallery = false } = {}) {
+    return new Promise((resolve) => {
+      const box = $("picker"), grid = $("picker-grid");
+      $("picker-title").textContent = title;
+      grid.replaceChildren(el("p", { class: "hint" }, "Loading…"));
+      box.hidden = false;
+      const onKey = (e) => { if (e.key === "Escape") close(null); };
+      const close = (v) => { box.hidden = true; document.removeEventListener("keydown", onKey); resolve(v); };
+      document.addEventListener("keydown", onKey);
+      $("picker-close").onclick = () => close(null);
+      box.onclick = (e) => { if (e.target === box) close(null); };
+      let files = [];
+      const draw = () => {
+        grid.replaceChildren();
+        if (!files.length) grid.append(el("p", { class: "hint" }, "No pictures yet."));
+        files.forEach((f) => {
+          const used = usedBy(f.src);
+          const inGallery = forGallery && gallery.some((g) => g.src === f.src);
+          const use = el("button", { class: "primary", disabled: inGallery }, inGallery ? "Already in gallery" : "Use this");
+          use.onclick = () => close(f.src);
+          const buttons = el("div", { class: "row" }, use);
+          if (!f.builtIn && !used.length) {
+            const del = el("button", { class: "danger", title: "Delete this picture for good" }, "Delete");
+            del.onclick = async () => {
+              if (!confirm("Delete this picture for good? It isn't used anywhere on the site.")) return;
+              try { await api(`/api/admin/library?src=${encodeURIComponent(f.src)}`, { method: "DELETE" }); files = files.filter((x) => x !== f); draw(); toast("Picture deleted"); } catch (e) { toast(e.message); }
+            };
+            buttons.append(del);
+          }
+          grid.append(el("div", { class: "pitem" },
+            el("img", { src: show(f.src), alt: "", loading: "lazy" }),
+            el("span", {}, used.length ? "Used: " + used.join(", ") : f.builtIn ? "Built-in photo · not used" : "Not used"),
+            buttons));
+        });
+      };
+      api("/api/admin/library").then((d) => { files = d.files; draw(); }).catch((e) => grid.replaceChildren(el("p", { class: "msg err" }, e.message)));
+    });
+  }
+
   // ---------- flyers ----------
   function renderFlyers(flyers) {
+    flyersNow = flyers;
     const box = $("flyers"); box.replaceChildren();
     [1, 2].forEach((slot) => {
       const f = flyers.find((x) => x.slot === slot) || { slot, src: "", alt: "Upcoming show flyer", stamp: "", visible: false };
       let src = f.src;
-      const preview = src ? el("img", { src: show(src), alt: f.alt }) : el("div", { class: "noimg" }, "No picture yet");
+      let preview = src ? el("img", { src: show(src), alt: f.alt }) : el("div", { class: "noimg" }, "No picture yet");
+      const setPreview = (url) => { const img = el("img", { src: url }); preview.replaceWith(img); preview = img; };
+      const pick = el("button", {}, "Choose an uploaded picture…");
       const file = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp" });
       const alt = el("input", { type: "text", value: f.alt, maxLength: 200 });
       const stamp = el("input", { type: "text", value: f.stamp, maxLength: 20, placeholder: "e.g. ROCKED!  (leave blank for no stamp)" });
       const vis = el("input", { type: "checkbox", checked: f.visible });
       const msg = el("span", { class: "msg" });
       const save = el("button", { class: "primary" }, "Save flyer " + slot);
-      file.addEventListener("change", () => { if (file.files[0]) { const u = URL.createObjectURL(file.files[0]); const img = el("img", { src: u }); preview.replaceWith(img); } });
+      file.addEventListener("change", () => { if (file.files[0]) { setPreview(URL.createObjectURL(file.files[0])); msg.className = "msg"; msg.textContent = "Click Save to use it."; } });
+      pick.addEventListener("click", async () => {
+        const chosen = await pickPicture(`Choose a picture for flyer ${slot}`);
+        if (!chosen) return;
+        src = chosen; file.value = ""; setPreview(show(chosen));
+        msg.className = "msg"; msg.textContent = "Click Save to use it.";
+      });
       save.addEventListener("click", async () => {
         save.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
         try {
@@ -131,7 +207,7 @@
       box.append(el("div", { class: "card flyer" },
         el("h3", { style: "margin:0 0 10px" }, `Flyer ${slot} ` , el("span", { class: "hint", style: "font-weight:400" }, slot === 1 ? "(left)" : "(right)")),
         preview,
-        el("label", {}, "Replace picture"), file,
+        el("label", {}, "Replace picture"), file, el("div", { class: "or" }, "or"), pick,
         el("label", {}, "Description (for screen readers)"), alt,
         el("label", {}, "Stamp text"), stamp,
         el("label", { class: "check" }, vis, "Show this flyer on the site"),
@@ -150,7 +226,7 @@
       const save = el("button", {}, "Save text");
       const up = el("button", { title: "Move earlier", disabled: i === 0 }, "←");
       const down = el("button", { title: "Move later", disabled: i === gallery.length - 1 }, "→");
-      const del = el("button", { class: "danger" }, "Delete");
+      const del = el("button", { class: "danger", title: "Take it out of the gallery (the picture stays in your uploaded pictures)" }, "Remove");
       const vis = el("input", { type: "checkbox", checked: g.visible });
       const pic = el("img", { src: show(g.src), alt: g.alt, loading: "lazy", draggable: false, title: "Drag the picture to move it" });
       const li = el("li", { class: "gitem" + (g.alt ? "" : " missing-alt") + (g.visible ? "" : " is-hidden") },
@@ -174,8 +250,8 @@
       up.addEventListener("click", () => move(i - 1));
       down.addEventListener("click", () => move(i + 1));
       del.addEventListener("click", async () => {
-        if (!confirm("Delete this photo for good?\n\nTo just take it off the site and keep it here, untick \"Show in the carousel\" instead.")) return;
-        try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "DELETE" }); gallery = d.gallery; renderGallery(); toast("Deleted"); } catch (e) { toast(e.message); }
+        if (!confirm("Take this photo out of the gallery?\n\nThe picture stays in your uploaded pictures, so you can add it back later.\nTo keep it here but off the site, untick \"Show in the carousel\" instead.")) return;
+        try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "DELETE" }); gallery = d.gallery; renderGallery(); toast("Taken out of the gallery"); } catch (e) { toast(e.message); }
       });
       // Drag to reorder: only by the picture, so clicking and dragging in the text boxes selects text as normal.
       // The whole card is draggable just while the mouse is held down on the picture.
@@ -216,6 +292,15 @@
       msg.className = "msg ok"; msg.textContent = `Added ${done} photo${done === 1 ? "" : "s"} to the end. Add a description to each.`;
     } catch (e) { renderGallery(); msg.className = "msg err"; msg.textContent = `${done} uploaded, then: ${e.message}`; }
     finally { btn.disabled = false; }
+  });
+
+  $("g-pick").addEventListener("click", async () => {
+    const chosen = await pickPicture("Add a picture to the gallery", { forGallery: true });
+    if (!chosen) return;
+    try {
+      const d = await api("/api/admin/gallery", { method: "POST", json: { src: chosen, alt: "", caption: "" } });
+      gallery = d.gallery; renderGallery(); toast("Added to the end of the gallery");
+    } catch (e) { toast(e.message); }
   });
 
   // ---------- start ----------
