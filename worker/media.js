@@ -9,7 +9,7 @@
 //   POST   /api/admin/upload?kind=...       upload one image (the page shrinks it first); returns its address
 //   PUT    /api/admin/flyers/:slot          { src, alt, stamp, visible }  update flyer 1 or 2
 //   POST   /api/admin/gallery               { src, alt, caption }  add a photo (goes to the end)
-//   PUT    /api/admin/gallery/:id           { alt, caption }       edit a photo's text
+//   PUT    /api/admin/gallery/:id           { alt, caption } and/or { visible }   edit a photo's text / show or hide it
 //   PUT    /api/admin/gallery-order         { ids: [...] }          new order
 //   DELETE /api/admin/gallery/:id                                   remove a photo
 //
@@ -44,6 +44,11 @@ function ensureSchema(db) {
           caption TEXT NOT NULL DEFAULT '', sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS song_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
       ]);
+      // Added later: a gallery photo can be kept but left out of the carousel (visible = 0).
+      const cols = (await db.prepare("PRAGMA table_info(site_gallery)").all()).results;
+      if (!cols.some((c) => c.name === "visible")) {
+        await db.prepare("ALTER TABLE site_gallery ADD COLUMN visible INTEGER NOT NULL DEFAULT 1").run();
+      }
       // Copy today's flyers and gallery in once, ever (never again, even if every photo is later removed).
       const seeded = await db.prepare("SELECT v FROM song_settings WHERE k = 'media_seeded'").first();
       if (!seeded) {
@@ -63,7 +68,8 @@ function ensureSchema(db) {
 async function state(db) {
   const flyers = (await db.prepare("SELECT slot, src, alt, stamp, visible FROM site_flyers ORDER BY slot").all()).results
     .map((f) => ({ ...f, visible: !!f.visible }));
-  const gallery = (await db.prepare("SELECT id, src, alt, caption FROM site_gallery ORDER BY sort, id").all()).results;
+  const gallery = (await db.prepare("SELECT id, src, alt, caption, visible FROM site_gallery ORDER BY sort, id").all()).results
+    .map((g) => ({ ...g, visible: !!g.visible }));
   return { flyers, gallery };
 }
 
@@ -147,7 +153,11 @@ export async function handleMedia(request, env, ctx) {
     // Public: what the home page shows
     if (path === "/api/media" && method === "GET") {
       const s = await state(db);
-      return json({ ok: true, flyers: s.flyers.filter((f) => f.visible && f.src), gallery: s.gallery });
+      return json({
+        ok: true,
+        flyers: s.flyers.filter((f) => f.visible && f.src),
+        gallery: s.gallery.filter((g) => g.visible).map(({ id, src, alt, caption }) => ({ id, src, alt, caption })),
+      });
     }
 
     if (!path.startsWith("/api/admin/")) return json({ ok: false, error: "Not found" }, 404);
@@ -212,7 +222,11 @@ export async function handleMedia(request, env, ctx) {
       if (!row) return json({ ok: false, error: "Not found" }, 404);
       if (method === "PUT") {
         let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
-        await db.prepare("UPDATE site_gallery SET alt = ?1, caption = ?2 WHERE id = ?3").bind(clean(d.alt, 200), clean(d.caption, 300), id).run();
+        // Either the text (alt + caption), the "show in the carousel" switch, or both.
+        if ("alt" in d || "caption" in d) {
+          await db.prepare("UPDATE site_gallery SET alt = ?1, caption = ?2 WHERE id = ?3").bind(clean(d.alt, 200), clean(d.caption, 300), id).run();
+        }
+        if ("visible" in d) await db.prepare("UPDATE site_gallery SET visible = ?1 WHERE id = ?2").bind(d.visible ? 1 : 0, id).run();
         return json({ ok: true, ...(await state(db)) });
       }
       if (method === "DELETE") {

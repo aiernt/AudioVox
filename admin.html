@@ -40,6 +40,11 @@
   .gitem .row{margin-top:4px;}
   .gitem button{padding:4px 9px;font-size:.85rem;}
   .gitem.missing-alt{border-color:#e7b416;}
+  .gitem .check{margin:0;font-size:.9rem;}
+  .gitem.is-hidden{background:#efefec;}
+  .gitem.is-hidden img{opacity:.35;}
+  .gitem .off{display:none;font-size:.8rem;color:var(--muted);font-weight:600;}
+  .gitem.is-hidden .off{display:inline;}
   #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d1d1f;color:#fff;padding:10px 16px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;}
   #toast.on{opacity:1;}
   .denied{max-width:560px;margin:60px auto;}
@@ -57,7 +62,7 @@
   <div class="flyers" id="flyers"></div>
 
   <h2>Gallery</h2>
-  <p class="hint">The photos in the &ldquo;Live Shots&rdquo; carousel. Drag photos to change the order (or use the arrows). Big photos are shrunk automatically before uploading. A yellow border means the photo has no description yet.</p>
+  <p class="hint">The photos in the &ldquo;Live Shots&rdquo; carousel. Drag photos to change the order (or use the arrows). Big photos are shrunk automatically before uploading. A yellow border means the photo has no description yet. Untick &ldquo;Show in the carousel&rdquo; to keep a photo here without showing it on the site.</p>
   <div class="card upload">
     <input type="file" id="g-files" accept="image/jpeg,image/png,image/webp" multiple>
     <button class="primary" id="g-upload">Upload photos</button>
@@ -146,17 +151,29 @@
       const up = el("button", { title: "Move earlier", disabled: i === 0 }, "←");
       const down = el("button", { title: "Move later", disabled: i === gallery.length - 1 }, "→");
       const del = el("button", { class: "danger" }, "Delete");
-      const li = el("li", { class: "gitem" + (g.alt ? "" : " missing-alt"), draggable: true },
+      const vis = el("input", { type: "checkbox", checked: g.visible });
+      const li = el("li", { class: "gitem" + (g.alt ? "" : " missing-alt") + (g.visible ? "" : " is-hidden"), draggable: true },
         el("img", { src: show(g.src), alt: g.alt, loading: "lazy" }),
-        el("span", { class: "num" }, `#${i + 1}`), alt, cap,
+        el("span", { class: "num" }, `#${i + 1} `, el("span", { class: "off" }, "· Hidden from the carousel")), alt, cap,
+        el("label", { class: "check" }, vis, "Show in the carousel"),
         el("div", { class: "row" }, save, up, down, del));
       li.dataset.id = g.id;
+      // Show / hide without redrawing the list, so text typed in other photos isn't lost.
+      vis.addEventListener("change", async () => {
+        vis.disabled = true;
+        try {
+          await api(`/api/admin/gallery/${g.id}`, { method: "PUT", json: { visible: vis.checked } });
+          g.visible = vis.checked; li.classList.toggle("is-hidden", !g.visible);
+          toast(g.visible ? "Back in the carousel" : "Hidden from the carousel (still saved here)");
+        } catch (e) { vis.checked = g.visible; toast(e.message); }
+        finally { vis.disabled = false; }
+      });
       save.addEventListener("click", async () => { save.disabled = true; try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "PUT", json: { alt: alt.value, caption: cap.value } }); gallery = d.gallery; renderGallery(); toast("Saved"); } catch (e) { toast(e.message); save.disabled = false; } });
       const move = (to) => { const ids = gallery.map((x) => x.id); ids.splice(i, 1); ids.splice(to, 0, g.id); saveOrder(ids); };
       up.addEventListener("click", () => move(i - 1));
       down.addEventListener("click", () => move(i + 1));
       del.addEventListener("click", async () => {
-        if (!confirm("Delete this photo from the gallery?")) return;
+        if (!confirm("Delete this photo for good?\n\nTo just take it off the site and keep it here, untick \"Show in the carousel\" instead.")) return;
         try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "DELETE" }); gallery = d.gallery; renderGallery(); toast("Deleted"); } catch (e) { toast(e.message); }
       });
       // drag to reorder

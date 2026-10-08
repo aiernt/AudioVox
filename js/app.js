@@ -272,9 +272,11 @@ function buildGallery(items) {
 }
 if (galleryWrapper) {
   siteMedia.then((d) => {
-    const items = d && d.gallery && d.gallery.length
+    // The built-in photos are only used if the admin settings can't be read at all.
+    const items = d && Array.isArray(d.gallery)
       ? d.gallery
       : GALLERY_IMAGES.map(({ file, alt }) => ({ src: `images/gallery/${file}`, alt, caption: "" }));
+    if (!items.length) { galleryWrapper.closest(".gallery-carousel").hidden = true; return; }   // every photo hidden in the admin page
     buildGallery(items);
   });
 }
