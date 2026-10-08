@@ -52,9 +52,12 @@
   /* picture library (pick a picture that's already uploaded) */
   .picker{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20;}
   .picker[hidden]{display:none;}
+  /* while the library is open the page behind it doesn't scroll (the gutter keeps the page from shifting when its scrollbar goes) */
+  html{scrollbar-gutter:stable;}
+  body.picker-open{overflow:hidden;}
   .picker-box{background:#fff;border-radius:8px;width:min(1000px,100%);max-height:90vh;display:flex;flex-direction:column;}
   .picker-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);}
-  .picker-grid{overflow:auto;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
+  .picker-grid{overflow:auto;overscroll-behavior:contain;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
   .pitem{border:1px solid var(--line);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:4px;font-size:.8rem;color:var(--muted);}
   .pitem img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;background:#eee;}
   .pitem .row{margin-top:2px;gap:6px;}
@@ -139,9 +142,9 @@
       const box = $("picker"), grid = $("picker-grid");
       $("picker-title").textContent = title;
       grid.replaceChildren(el("p", { class: "hint" }, "Loading…"));
-      box.hidden = false;
+      box.hidden = false; document.body.classList.add("picker-open");
       const onKey = (e) => { if (e.key === "Escape") close(null); };
-      const close = (v) => { box.hidden = true; document.removeEventListener("keydown", onKey); resolve(v); };
+      const close = (v) => { box.hidden = true; document.body.classList.remove("picker-open"); document.removeEventListener("keydown", onKey); resolve(v); };
       document.addEventListener("keydown", onKey);
       $("picker-close").onclick = () => close(null);
       box.onclick = (e) => { if (e.target === box) close(null); };
