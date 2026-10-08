@@ -15,6 +15,7 @@
 //                             (the domain must be verified in Resend)
 
 import { handleSongs } from "./songs.js";
+import { handleMedia } from "./media.js";
 
 const MAX = { name: 120, email: 200, phone: 60, date: 40, venue: 200, details: 4000 };
 
@@ -109,6 +110,9 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/songs" || pathname.startsWith("/api/songs/")) {
       return handleSongs(request, env, ctx);
+    }
+    if (pathname === "/api/media" || pathname.startsWith("/api/admin/") || pathname.startsWith("/media/")) {
+      return handleMedia(request, env, ctx);
     }
     if (pathname === "/api/booking") {
       if (request.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>AudioVox Admin</title>
+<link rel="icon" href="favicon.ico" sizes="48x48 32x32">
+<style>
+  :root{--bg:#f6f6f4;--card:#fff;--ink:#1d1d1f;--muted:#6b6b70;--line:#dcdcdf;--red:#c8102e;--ok:#1a7f37;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;background:#1d1d1f;color:#fff;}
+  header b{font-size:1.1rem;letter-spacing:.02em;}
+  header nav a{color:#ddd;margin-left:16px;text-decoration:none;font-size:.9rem;}
+  header nav a:hover{color:#fff;text-decoration:underline;}
+  main{max-width:1100px;margin:0 auto;padding:22px;}
+  h2{margin:28px 0 6px;font-size:1.3rem;}
+  .hint{color:var(--muted);margin:0 0 14px;font-size:.9rem;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;}
+  .flyers{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;}
+  .flyer img{width:100%;max-height:340px;object-fit:contain;background:#eee;border-radius:4px;display:block;}
+  .flyer .noimg{height:200px;display:flex;align-items:center;justify-content:center;background:#eee;color:var(--muted);border-radius:4px;}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 3px;}
+  input[type=text]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:4px;font:inherit;}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;}
+  button,.btn{font:inherit;padding:7px 14px;border-radius:4px;border:1px solid var(--line);background:#fff;cursor:pointer;}
+  button.primary{background:var(--red);border-color:var(--red);color:#fff;}
+  button.danger{color:var(--red);}
+  button:disabled{opacity:.5;cursor:default;}
+  .check{display:flex;align-items:center;gap:6px;margin:10px 0 0;color:var(--ink);font-size:.95rem;}
+  .msg{font-size:.9rem;min-height:1.3em;}
+  .msg.ok{color:var(--ok);} .msg.err{color:var(--red);}
+  .upload{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .gallery{list-style:none;margin:16px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+  .gitem{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;}
+  .gitem.dragging{opacity:.4;} .gitem.over{outline:2px dashed var(--red);}
+  .gitem img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:4px;background:#eee;cursor:grab;}
+  .gitem .num{font-size:.8rem;color:var(--muted);}
+  .gitem .row{margin-top:4px;}
+  .gitem button{padding:4px 9px;font-size:.85rem;}
+  .gitem.missing-alt{border-color:#e7b416;}
+  #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1d1d1f;color:#fff;padding:10px 16px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;}
+  #toast.on{opacity:1;}
+  .denied{max-width:560px;margin:60px auto;}
+</style>
+</head>
+<body>
+<header>
+  <b>AudioVox Admin</b>
+  <nav><span id="who" style="color:#aaa;font-size:.85rem"></span><a href="/" target="_blank">View site</a><a href="/song-requests" target="_blank">Song requests</a><a href="/cdn-cgi/access/logout">Sign out</a></nav>
+</header>
+
+<main id="app" hidden>
+  <h2>Flyers</h2>
+  <p class="hint">The two tilted flyers on the home page. Replace the picture, add a stamp (like ROCKED!) or hide a flyer. Changes show on the site straight away.</p>
+  <div class="flyers" id="flyers"></div>
+
+  <h2>Gallery</h2>
+  <p class="hint">The photos in the &ldquo;Live Shots&rdquo; carousel. Drag photos to change the order (or use the arrows). Big photos are shrunk automatically before uploading. A yellow border means the photo has no description yet.</p>
+  <div class="card upload">
+    <input type="file" id="g-files" accept="image/jpeg,image/png,image/webp" multiple>
+    <button class="primary" id="g-upload">Upload photos</button>
+    <span class="msg" id="g-msg"></span>
+  </div>
+  <ul class="gallery" id="gallery"></ul>
+</main>
+<div class="denied card" id="denied" hidden></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === "class") e.className = v; else if (k in e) e[k] = v; else e.setAttribute(k, v); } e.append(...kids); return e; };
+  let toastT; const toast = (t) => { const n = $("toast"); n.textContent = t; n.classList.add("on"); clearTimeout(toastT); toastT = setTimeout(() => n.classList.remove("on"), 2600); };
+
+  // Signed in through Cloudflare Access (the browser sends the login automatically).
+  // For local testing only, an ADMIN_TOKEN saved by the song-requests page is also sent.
+  let token = ""; try { token = localStorage.getItem("avSongAdmin") || ""; } catch {}
+  async function api(path, opts = {}) {
+    const headers = { ...(opts.json !== undefined ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) };
+    if (token) headers.Authorization = "Bearer " + token;
+    const res = await fetch(path, { method: opts.method || "GET", headers, body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.body, credentials: "same-origin" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) { const e = new Error(data.error || `Something went wrong (${res.status}).`); e.status = res.status; throw e; }
+    return data;
+  }
+
+  // Shrink a photo in the browser before uploading (longest side 2000px, JPEG), so the site stays fast.
+  async function shrink(file, maxSide = 2000) {
+    const bmp = await createImageBitmap(file).catch(() => null);
+    if (!bmp) throw new Error(`Couldn't read ${file.name}. Is it a photo?`);
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
+  }
+  async function upload(file, kind) {
+    const blob = await shrink(file);
+    return (await api(`/api/admin/upload?kind=${kind}`, { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } })).src;
+  }
+  const show = (src) => (src.startsWith("/") ? src : "/" + src);
+
+  // ---------- flyers ----------
+  function renderFlyers(flyers) {
+    const box = $("flyers"); box.replaceChildren();
+    [1, 2].forEach((slot) => {
+      const f = flyers.find((x) => x.slot === slot) || { slot, src: "", alt: "Upcoming show flyer", stamp: "", visible: false };
+      let src = f.src;
+      const preview = src ? el("img", { src: show(src), alt: f.alt }) : el("div", { class: "noimg" }, "No picture yet");
+      const file = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp" });
+      const alt = el("input", { type: "text", value: f.alt, maxLength: 200 });
+      const stamp = el("input", { type: "text", value: f.stamp, maxLength: 20, placeholder: "e.g. ROCKED!  (leave blank for no stamp)" });
+      const vis = el("input", { type: "checkbox", checked: f.visible });
+      const msg = el("span", { class: "msg" });
+      const save = el("button", { class: "primary" }, "Save flyer " + slot);
+      file.addEventListener("change", () => { if (file.files[0]) { const u = URL.createObjectURL(file.files[0]); const img = el("img", { src: u }); preview.replaceWith(img); } });
+      save.addEventListener("click", async () => {
+        save.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
+        try {
+          if (file.files[0]) { msg.textContent = "Uploading picture…"; src = await upload(file.files[0], "flyer"); }
+          const d = await api(`/api/admin/flyers/${slot}`, { method: "PUT", json: { src, alt: alt.value, stamp: stamp.value, visible: vis.checked } });
+          renderFlyers(d.flyers); toast(`Flyer ${slot} saved`);
+        } catch (e) { msg.className = "msg err"; msg.textContent = e.message; save.disabled = false; }
+      });
+      box.append(el("div", { class: "card flyer" },
+        el("h3", { style: "margin:0 0 10px" }, `Flyer ${slot} ` , el("span", { class: "hint", style: "font-weight:400" }, slot === 1 ? "(left)" : "(right)")),
+        preview,
+        el("label", {}, "Replace picture"), file,
+        el("label", {}, "Description (for screen readers)"), alt,
+        el("label", {}, "Stamp text"), stamp,
+        el("label", { class: "check" }, vis, "Show this flyer on the site"),
+        el("div", { class: "row" }, save, msg)));
+    });
+  }
+
+  // ---------- gallery ----------
+  let gallery = [];
+  async function saveOrder(ids) { try { const d = await api("/api/admin/gallery-order", { method: "PUT", json: { ids } }); gallery = d.gallery; renderGallery(); toast("Order saved"); } catch (e) { toast(e.message); } }
+  function renderGallery() {
+    const list = $("gallery"); list.replaceChildren();
+    gallery.forEach((g, i) => {
+      const alt = el("input", { type: "text", value: g.alt, placeholder: "Description (what's in the photo)", maxLength: 200 });
+      const cap = el("input", { type: "text", value: g.caption, placeholder: "Caption (optional, shown when enlarged)", maxLength: 300 });
+      const save = el("button", {}, "Save text");
+      const up = el("button", { title: "Move earlier", disabled: i === 0 }, "←");
+      const down = el("button", { title: "Move later", disabled: i === gallery.length - 1 }, "→");
+      const del = el("button", { class: "danger" }, "Delete");
+      const li = el("li", { class: "gitem" + (g.alt ? "" : " missing-alt"), draggable: true },
+        el("img", { src: show(g.src), alt: g.alt, loading: "lazy" }),
+        el("span", { class: "num" }, `#${i + 1}`), alt, cap,
+        el("div", { class: "row" }, save, up, down, del));
+      li.dataset.id = g.id;
+      save.addEventListener("click", async () => { save.disabled = true; try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "PUT", json: { alt: alt.value, caption: cap.value } }); gallery = d.gallery; renderGallery(); toast("Saved"); } catch (e) { toast(e.message); save.disabled = false; } });
+      const move = (to) => { const ids = gallery.map((x) => x.id); ids.splice(i, 1); ids.splice(to, 0, g.id); saveOrder(ids); };
+      up.addEventListener("click", () => move(i - 1));
+      down.addEventListener("click", () => move(i + 1));
+      del.addEventListener("click", async () => {
+        if (!confirm("Delete this photo from the gallery?")) return;
+        try { const d = await api(`/api/admin/gallery/${g.id}`, { method: "DELETE" }); gallery = d.gallery; renderGallery(); toast("Deleted"); } catch (e) { toast(e.message); }
+      });
+      // drag to reorder
+      li.addEventListener("dragstart", (e) => { li.classList.add("dragging"); e.dataTransfer.setData("text/plain", String(g.id)); e.dataTransfer.effectAllowed = "move"; });
+      li.addEventListener("dragend", () => li.classList.remove("dragging"));
+      li.addEventListener("dragover", (e) => { e.preventDefault(); li.classList.add("over"); });
+      li.addEventListener("dragleave", () => li.classList.remove("over"));
+      li.addEventListener("drop", (e) => {
+        e.preventDefault(); li.classList.remove("over");
+        const from = Number(e.dataTransfer.getData("text/plain")); if (!from || from === g.id) return;
+        const ids = gallery.map((x) => x.id).filter((x) => x !== from); ids.splice(ids.indexOf(g.id), 0, from); saveOrder(ids);
+      });
+      list.append(li);
+    });
+  }
+  $("g-upload").addEventListener("click", async () => {
+    const files = [...$("g-files").files]; const msg = $("g-msg"), btn = $("g-upload");
+    if (!files.length) { msg.className = "msg err"; msg.textContent = "Choose one or more photos first."; return; }
+    btn.disabled = true; msg.className = "msg";
+    let done = 0;
+    try {
+      for (const f of files) {
+        msg.textContent = `Uploading ${done + 1} of ${files.length}…`;
+        const src = await upload(f, "gallery");
+        const d = await api("/api/admin/gallery", { method: "POST", json: { src, alt: "", caption: "" } });
+        gallery = d.gallery; done++;
+      }
+      renderGallery(); $("g-files").value = "";
+      msg.className = "msg ok"; msg.textContent = `Added ${done} photo${done === 1 ? "" : "s"} to the end. Add a description to each.`;
+    } catch (e) { renderGallery(); msg.className = "msg err"; msg.textContent = `${done} uploaded, then: ${e.message}`; }
+    finally { btn.disabled = false; }
+  });
+
+  // ---------- start ----------
+  (async () => {
+    try {
+      const d = await api("/api/admin/state");
+      $("who").textContent = `Signed in: ${d.email}`;
+      if (!d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
+      renderFlyers(d.flyers); gallery = d.gallery; renderGallery();
+      $("app").hidden = false;
+    } catch (e) {
+      const box = $("denied"); box.hidden = false;
+      box.append(el("h2", { style: "margin-top:0" }, "Not signed in"), el("p", {}, e.status === 403 ? "This page is only for the band. Please sign in again." : e.message));
+    }
+  })();
+})();
+</script>
+</body>
+</html>

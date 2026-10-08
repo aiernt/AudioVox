@@ -44,7 +44,8 @@ const BANDS = [
 ];
 
 // ---------- Gallery ----------
-// To add a photo: drop the file into /images, then add one line below.
+// The gallery is managed from the admin page now (admin.html). This list is only the fallback used if the
+// site can't reach the server.
 const GALLERY_IMAGES = [
   { file: "gallery-1.jpg", alt: "" },
   { file: "gallery-2.jpg", alt: "" },
@@ -225,18 +226,26 @@ document.querySelectorAll(".photo-fallback").forEach(bindPhotoFallback);
 // hand-rolled drag carousel unreliable.
 const galleryWrapper = document.getElementById("gallery-wrapper");
 
-if (galleryWrapper) {
-  GALLERY_IMAGES.forEach(({ file, alt }) => {
-    const src = `images/gallery/${file}`;
+// The flyers and gallery are managed from the admin page (admin.html) and come from /api/media.
+// If that can't be reached, the site falls back to the photos built into the page (GALLERY_IMAGES and the
+// flyers in index.html), so it never shows up empty.
+const siteMedia = fetch("/api/media", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((d) => (d && d.ok ? d : null))
+  .catch(() => null);
+
+function buildGallery(items) {
+  items.forEach(({ src, alt, caption }) => {
     const slide = document.createElement("div");
     slide.className = "swiper-slide";
     const img = document.createElement("img");
     img.src = src;
-    img.alt = alt;
+    img.alt = alt || "";
     img.loading = "lazy";
     img.className = "photo-fallback gallery-photo lightbox-trigger";
     img.dataset.lightboxGroup = "gallery";
     img.dataset.fallbackLabel = src;
+    if (caption) img.dataset.caption = caption;
     bindPhotoFallback(img);
     slide.appendChild(img);
     galleryWrapper.appendChild(slide);
@@ -261,6 +270,36 @@ if (galleryWrapper) {
     },
   });
 }
+if (galleryWrapper) {
+  siteMedia.then((d) => {
+    const items = d && d.gallery && d.gallery.length
+      ? d.gallery
+      : GALLERY_IMAGES.map(({ file, alt }) => ({ src: `images/gallery/${file}`, alt, caption: "" }));
+    buildGallery(items);
+  });
+}
+
+// Flyers: use the admin page's settings (picture, stamp, shown/hidden) for flyer 1 (left) and 2 (right).
+siteMedia.then((d) => {
+  if (!d || !Array.isArray(d.flyers)) return;
+  [["next-show", "next-show-img", 1], ["next-show-2", "next-show-img-2", 2]].forEach(([boxId, imgId, slot]) => {
+    const box = document.getElementById(boxId), img = document.getElementById(imgId);
+    if (!box || !img) return;
+    const f = d.flyers.find((x) => x.slot === slot);
+    if (!f) { box.remove(); return; }                   // hidden in the admin page
+    img.src = f.src;
+    img.alt = f.alt || "Upcoming show flyer";
+    let stamp = box.querySelector(".next-show-stamp");
+    if (f.stamp) {
+      img.dataset.stamp = f.stamp;
+      if (!stamp) { stamp = document.createElement("span"); stamp.className = "next-show-stamp"; stamp.setAttribute("aria-hidden", "true"); box.appendChild(stamp); }
+      stamp.textContent = f.stamp;
+    } else {
+      delete img.dataset.stamp;
+      if (stamp) stamp.remove();
+    }
+  });
+});
 
 // ---------- Lightbox ----------
 const lightbox = document.getElementById("lightbox");
@@ -301,6 +340,8 @@ function showLightboxPhoto(index) {
   lightboxImg.src = el.dataset.src || el.currentSrc || el.src || "";
   lightboxImg.alt = el.dataset.alt || el.alt || "";
   if (lightboxStamp) lightboxStamp.hidden = true; // re-placed once the new image has loaded
+  const lightboxCaption = document.getElementById("lightbox-caption");
+  if (lightboxCaption) { lightboxCaption.textContent = el.dataset.caption || ""; lightboxCaption.hidden = !el.dataset.caption; }
 
   // Some photos (e.g. the show flyer) carry a call-to-action link to show
   // inside the lightbox rather than navigating away the instant you click

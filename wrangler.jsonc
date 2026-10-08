@@ -7,9 +7,11 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
-    // Only /api/* goes through the worker; everything else is served straight from the files.
-    "run_worker_first": ["/api/*"]
+    // Only /api/* and uploaded photos (/media/*) go through the worker; everything else is served straight from the files.
+    "run_worker_first": ["/api/*", "/media/*"]
   },
+  // R2 bucket for photos uploaded from the admin page (flyers, gallery). Created automatically on deploy if missing.
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "audiovox-media" }],
   // D1 database for the song-request list (fan songs and votes). Pinned by ID so every
   // deploy uses this exact database and can never create a new, empty one.
   // Deploys never change the data in it; the tables are created by worker/songs.js if missing.
