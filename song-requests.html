@@ -170,6 +170,28 @@
   @media (max-width:780px){#sl-grid{grid-template-columns:repeat(4,1fr);}}
   @media (max-width:620px){#sl-grid{grid-template-columns:repeat(3,1fr);}}
   @media (max-width:520px){#sl-grid{grid-template-columns:repeat(2,1fr);gap:10px}.sl-song{font-size:1.1rem}.sl-btn{padding:5px 10px}}
+  /* phones: the play button sits on the album cover (like the top 10) and the vote button is narrower, so the song title gets the room */
+  @media (max-width:520px){
+    .sl-row{display:grid;grid-template-columns:22px 44px minmax(0,1fr) auto auto auto;column-gap:8px;padding:8px 10px;}
+    .sl-row .pos{grid-column:1;width:auto;font-size:1rem;}
+    .sl-row img,.sl-row .ph{grid-column:2;grid-row:1;width:44px;height:44px;}
+    .sl-row .sl-play{grid-column:2;grid-row:1;place-self:center;width:28px;height:28px;}
+    .sl-row .t{grid-column:3;}
+    .sl-row b{font-size:1.05rem;}
+    .sl-row .a{font-size:.72rem;}
+    .sl-row .sl-del{grid-column:4;}
+    .sl-row .v{grid-column:5;min-width:0;font-size:1.1rem;}
+    .sl-row .sl-btn{grid-column:6;width:72px;font-size:.85rem;}
+  }
+  /* the smallest phones (about 320px wide) */
+  @media (max-width:380px){
+    .sl-row{grid-template-columns:16px 40px minmax(0,1fr) auto auto auto;column-gap:7px;padding:8px;}
+    .sl-row img,.sl-row .ph{width:40px;height:40px;}
+    .sl-row .sl-play{width:26px;height:26px;}
+    .sl-row b{font-size:.98rem;}
+    .sl-row .a{font-size:.68rem;letter-spacing:.02em;}
+    .sl-row .sl-btn{width:60px;font-size:.8rem;}
+  }
   .sg-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;}
   .sl-empty{color:var(--grey);padding:14px 2px;}
   .sl-del{flex:none;background:none;border:0;color:var(--grey-dim);font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:4px;}
