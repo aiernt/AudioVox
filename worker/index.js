@@ -1,7 +1,7 @@
 // Cloudflare Worker entry point (see wrangler.jsonc).
 //
 // The site itself is plain static files served by Workers Static Assets. This
-// script only runs for /api/*:
+// script only runs for /api/*, /media/* and the home page (/, see homePage in media.js):
 //   POST /api/booking  receives the booking form and relays it to the band's
 //                      internal inbox through Resend (https://resend.com)
 //   /api/songs*        the shared song-request list (see songs.js)
@@ -15,7 +15,7 @@
 //                             (the domain must be verified in Resend)
 
 import { handleSongs } from "./songs.js";
-import { handleMedia } from "./media.js";
+import { handleMedia, homePage } from "./media.js";
 
 const MAX = { name: 120, email: 200, phone: 60, date: 40, venue: 200, details: 4000 };
 
@@ -113,6 +113,9 @@ export default {
     }
     if (pathname === "/api/media" || pathname.startsWith("/api/admin/") || pathname.startsWith("/media/")) {
       return handleMedia(request, env, ctx);
+    }
+    if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
+      return homePage(request, env);
     }
     if (pathname === "/api/booking") {
       if (request.method !== "POST") return json({ ok: false, error: "Method not allowed" }, 405);

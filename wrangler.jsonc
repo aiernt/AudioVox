@@ -7,8 +7,9 @@
   "assets": {
     "directory": ".",
     "binding": "ASSETS",
-    // Only /api/* and uploaded photos (/media/*) go through the worker; everything else is served straight from the files.
-    "run_worker_first": ["/api/*", "/media/*"]
+    // Only /api/*, uploaded photos (/media/*) and the home page (/, to apply the flyer settings) go through the
+    // worker; everything else is served straight from the files.
+    "run_worker_first": ["/", "/api/*", "/media/*"]
   },
   // R2 bucket for photos uploaded from the admin page (flyers, gallery). Created automatically on deploy if missing.
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "audiovox-media" }],

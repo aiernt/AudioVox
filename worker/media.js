@@ -229,3 +229,54 @@ export async function handleMedia(request, env, ctx) {
     return json({ ok: false, error: "Something went wrong. Please try again." }, 500);
   }
 }
+
+// The home page (/) with the admin page's flyer settings already applied, so a hidden flyer is never sent and
+// never flashes on screen before the page's script catches up. If the database can't be read, the page is sent
+// as-is and the script in app.js applies the settings instead.
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+export async function homePage(request, env) {
+  // Ask for the full file every time (no "has it changed?" check), since what we send depends on the settings.
+  const headers = new Headers(request.headers);
+  headers.delete("If-None-Match");
+  headers.delete("If-Modified-Since");
+  const page = await env.ASSETS.fetch(new Request(request, { headers }));
+  if (page.status !== 200 || !(page.headers.get("Content-Type") || "").includes("text/html") || !env.DB) return page;
+
+  let flyers;
+  try {
+    await ensureSchema(env.DB);
+    flyers = (await state(env.DB)).flyers;
+  } catch (err) {
+    console.error("Home page flyers", err && err.message ? err.message : err);
+    return page;
+  }
+
+  let rewriter = new HTMLRewriter();
+  [["next-show", "next-show-img", 1], ["next-show-2", "next-show-img-2", 2]].forEach(([boxId, imgId, slot]) => {
+    const f = flyers.find((x) => x.slot === slot);
+    if (!f || !f.visible || !f.src) {
+      rewriter = rewriter.on(`#${boxId}`, { element: (el) => el.remove() });
+      return;
+    }
+    rewriter = rewriter
+      .on(`#${imgId}`, {
+        element: (el) => {
+          el.setAttribute("src", f.src);
+          el.setAttribute("alt", f.alt || "Upcoming show flyer");
+          if (f.stamp) el.setAttribute("data-stamp", f.stamp); else el.removeAttribute("data-stamp");
+        },
+      })
+      .on(`#${boxId} .next-show-stamp`, { element: (el) => el.remove() })
+      .on(`#${boxId}`, {
+        element: (el) => {
+          if (f.stamp) el.append(`<span class="next-show-stamp" aria-hidden="true">${escapeHtml(f.stamp)}</span>`, { html: true });
+        },
+      });
+  });
+
+  const out = rewriter.transform(page);
+  const res = new Response(out.body, out);
+  res.headers.delete("ETag");
+  res.headers.set("Cache-Control", "no-cache");
+  return res;
+}
