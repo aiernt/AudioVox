@@ -169,14 +169,14 @@
 </head>
 <body>
 <header>
-  <a class="brand" href="/admin/flyers">AudioVox Admin</a>
+  <a class="brand" href="/admin/about">AudioVox Admin</a>
   <nav class="pages" aria-label="Admin pages">
+    <a href="/admin/about" data-page="about">About</a>
     <a href="/admin/flyers" data-page="flyers">Flyers</a>
-    <a href="/admin/about" data-page="about">About the band</a>
     <a href="/admin/gallery" data-page="gallery">Gallery</a>
     <a href="/admin/bands" data-page="bands">Bands</a>
-    <a href="/admin/requests" data-page="requests">Song requests</a>
-    <a href="/admin/songs-we-play" data-page="played">Songs we play</a>
+    <a href="/admin/songs" data-page="played">Songs</a>
+    <a href="/admin/requests" data-page="requests">Requests</a>
   </nav>
   <nav class="out"><span id="who"></span><a href="/" target="_blank">View site &#8599;</a><a class="opt" href="/song-requests" target="_blank">Song page &#8599;</a><a href="/cdn-cgi/access/logout">Sign out</a></nav>
 </header>
@@ -236,7 +236,7 @@
 
   <section data-page="requests" hidden>
     <h2>Song requests <span class="hint" id="s-count"></span></h2>
-    <p class="hint">Songs fans have asked for on the <a href="/song-requests" target="_blank">Songs We Should Learn</a> page, most votes first. &ldquo;We learned it&rdquo; adds the song to <a href="/admin/songs-we-play">Songs we play</a> (so it can't be requested again) and takes it off this list.</p>
+    <p class="hint">Songs fans have asked for on the <a href="/song-requests" target="_blank">Songs We Should Learn</a> page, most votes first. &ldquo;We learned it&rdquo; adds the song to <a href="/admin/songs">Songs</a> (so it can't be requested again) and takes it off this list.</p>
     <div class="card upload">
       <button id="s-export">Download the list (spreadsheet)</button>
       <button id="s-test">Send a test email</button>
@@ -957,12 +957,12 @@
   });
 
   // ---------- start ----------
-  // Each admin page has its own address (/admin/flyers, /admin/gallery, /admin/requests, /admin/songs-we-play);
+  // Each admin page has its own address (/admin/about, /admin/flyers, /admin/gallery, /admin/bands, /admin/songs, /admin/requests);
   // they're all this one file (the Worker serves it for each), showing just that page's section.
-  const PAGES = { flyers: "Flyers", about: "About the band", gallery: "Gallery", bands: "Bands", requests: "Song requests", "songs-we-play": "Songs we play" };
+  const PAGES = { about: "About", flyers: "Flyers", gallery: "Gallery", bands: "Bands", songs: "Songs", "songs-we-play": "Songs", requests: "Requests" };
   const slug = location.pathname.replace(/^\/admin\/?/, "").replace(/\/$/, "");
-  const pageKey = { "": "flyers", flyers: "flyers", about: "about", gallery: "gallery", bands: "bands", requests: "requests", "songs-we-play": "played" }[slug] || "flyers";
-  document.title = `${PAGES[slug] || "Flyers"} · AudioVox Admin`;
+  const pageKey = { "": "about", about: "about", flyers: "flyers", gallery: "gallery", bands: "bands", songs: "played", "songs-we-play": "played", requests: "requests" }[slug] || "about";
+  document.title = `${PAGES[slug] || "About"} · AudioVox Admin`;
   document.querySelectorAll("[data-page]").forEach((n) => {
     if (n.tagName === "A") { n.classList.toggle("is-on", n.dataset.page === pageKey); if (n.dataset.page === pageKey) n.setAttribute("aria-current", "page"); }
     else n.hidden = n.dataset.page !== pageKey;
