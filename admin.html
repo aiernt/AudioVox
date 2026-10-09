@@ -73,6 +73,28 @@
   .known-add label{margin-top:0;}
   .known-add .check{margin:0 0 8px;}
   @media (max-width:700px){.known-add{grid-template-columns:1fr;}}
+  /* about the band */
+  h3.sub{margin:22px 0 8px;font-size:1.1rem;}
+  .bp-card{display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:18px;align-items:start;}
+  #bp-img{width:100%;aspect-ratio:4/3;object-fit:cover;object-position:center 30%;border-radius:4px;background:#eee;display:block;}
+  .members{display:flex;flex-direction:column;gap:12px;margin-top:12px;}
+  .mcard{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:start;}
+  .mcard.is-new{border:2px dashed var(--red);}
+  .mcard.is-hidden{background:#f3f3f1;}
+  .mcard.is-hidden .mphoto{opacity:.4;}
+  .mphoto{width:150px;aspect-ratio:1;border-radius:50%;object-fit:cover;border:3px solid var(--red);background:#eee;display:block;}
+  .mnophoto{width:150px;aspect-ratio:1;border-radius:50%;border:3px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.85rem;text-align:center;}
+  .mcard .pics{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+  .mcard .pics button{padding:5px 8px;font-size:.85rem;}
+  .mfields{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+  .mfields .wide{grid-column:1 / -1;}
+  textarea{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:4px;font:inherit;line-height:1.5;resize:vertical;}
+  @media (max-width:700px){
+    .bp-card,.mcard{grid-template-columns:1fr;}
+    .mcard > div:first-child{display:flex;gap:14px;align-items:center;}
+    .mphoto,.mnophoto{width:110px;}
+    .mfields{grid-template-columns:1fr;}
+  }
   /* bands: each card shows the tile the way the home page does (picture, or a colour made from the name) */
   .band-add{display:flex;flex-direction:column;gap:10px;max-width:640px;}
   .band-add label{margin-top:0;}
@@ -150,6 +172,7 @@
   <a class="brand" href="/admin/flyers">AudioVox Admin</a>
   <nav class="pages" aria-label="Admin pages">
     <a href="/admin/flyers" data-page="flyers">Flyers</a>
+    <a href="/admin/about" data-page="about">About the band</a>
     <a href="/admin/gallery" data-page="gallery">Gallery</a>
     <a href="/admin/bands" data-page="bands">Bands</a>
     <a href="/admin/requests" data-page="requests">Song requests</a>
@@ -163,6 +186,28 @@
     <h2>Flyers</h2>
     <p class="hint">The flyers sit in two piles on the home page, left and right. The top flyer in each pile is in front; the ones under it peek out behind at an angle. Clicking any flyer on the site opens them all full size. Give a flyer its show date and its stamp (like ROCKED!) appears by itself the day after the show; give it a take-down date and it comes off the site that day. Changes show on the site straight away.</p>
     <div class="flyers" id="flyers"></div>
+  </section>
+
+  <section data-page="about" hidden>
+    <h2>About the band</h2>
+    <p class="hint">The band photo next to &ldquo;Flannel. Feedback. Front Row Chaos.&rdquo; and the &ldquo;Meet The Band&rdquo; lineup. On the site, clicking a member's photo opens their bio.</p>
+    <h3 class="sub">Band photo</h3>
+    <div class="card bp-card">
+      <img id="bp-img" alt="The band photo">
+      <div>
+        <p class="hint" style="margin-top:0">Shown tilted, with tape, beside the band's intro. It's cropped to 4:3 on the site.</p>
+        <div class="row" style="margin:0">
+          <input type="file" id="bp-file" accept="image/jpeg,image/png,image/webp" hidden>
+          <button class="primary" id="bp-upload">Upload a new photo</button>
+          <button id="bp-pick">Choose an uploaded picture&hellip;</button>
+        </div>
+        <div class="msg" id="bp-msg" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <h3 class="sub">Members <span class="hint" id="m-count"></span></h3>
+    <p class="hint">In the order they appear on the site. Changes to a member show once you click Save.</p>
+    <button id="m-add">+ Add a member</button>
+    <div class="members" id="members"></div>
   </section>
 
   <section data-page="gallery" hidden>
@@ -344,6 +389,8 @@
   function usedBy(src) {
     const u = flyersNow.filter((f) => f.src === src).map(flyerLabel);
     bandsNow.filter((b) => b.src === src).forEach((b) => u.push(`Band: ${b.name}${b.visible ? "" : " (hidden)"}`));
+    membersNow.filter((m) => m.src === src).forEach((m) => u.push(`Member: ${m.name}${m.visible ? "" : " (hidden)"}`));
+    if (bandPhoto === src) u.push("Band photo");
     const gi = gallery.findIndex((g) => g.src === src);
     if (gi >= 0) u.push(`Gallery #${gi + 1}${gallery[gi].visible ? "" : " (hidden)"}`);
     return u;
@@ -607,6 +654,108 @@
     } catch (e) { toast(e.message); }
   });
 
+  // ---------- About the band: band photo + lineup ----------
+  let bandPhoto = "", membersNow = [];
+  function renderAbout() {
+    $("bp-img").src = bandPhoto ? show(bandPhoto) : "";
+    const on = membersNow.filter((m) => m.visible).length, off = membersNow.length - on;
+    $("m-count").textContent = `· ${on} on the site${off ? `, ${off} hidden` : ""}`;
+    const box = $("members"); box.replaceChildren();
+    membersNow.forEach((m, i) => box.append(memberCard(m, i, membersNow.length)));
+    $("m-add").disabled = false;
+  }
+  async function saveBandPhoto(src) {
+    const msg = $("bp-msg");
+    try { const d = await api("/api/admin/band-photo", { method: "PUT", json: { src } }); bandPhoto = d.bandPhoto; renderAbout(); msg.className = "msg ok"; msg.textContent = "Band photo changed."; }
+    catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+  }
+  $("bp-upload").addEventListener("click", () => $("bp-file").click());
+  $("bp-file").addEventListener("change", async () => {
+    const f = $("bp-file").files[0]; if (!f) return;
+    const blob = await cropPhoto(f, { title: "Crop the band photo", ratio: 4 / 3, maxSide: 2000 });
+    $("bp-file").value = "";
+    if (!blob) return;
+    $("bp-msg").className = "msg"; $("bp-msg").textContent = "Uploading…";
+    try { await saveBandPhoto(await uploadBlob(blob, "about")); } catch (e) { $("bp-msg").className = "msg err"; $("bp-msg").textContent = e.message; }
+  });
+  $("bp-pick").addEventListener("click", async () => { const src = await pickPicture("Choose the band photo"); if (src) saveBandPhoto(src); });
+  $("m-add").addEventListener("click", () => {
+    const card = memberCard({ id: 0, name: "", role: "", src: "", bio: "", wrap: false, visible: true }, 0, 0);
+    $("members").prepend(card); $("m-add").disabled = true; card.querySelector("input[type=text]").focus();
+  });
+  async function saveMemberOrder(ids) { try { const d = await api("/api/admin/member-order", { method: "PUT", json: { ids } }); membersNow = d.members; renderAbout(); toast("Order saved"); } catch (e) { toast(e.message); } }
+  // One member's card. A new member (id 0) is added at the end of the lineup when saved.
+  function memberCard(m, i, n) {
+    const isNew = !m.id;
+    let src = m.src, cropped = null;
+    let photo = src ? el("img", { class: "mphoto", src: show(src), alt: m.name }) : el("div", { class: "mnophoto" }, "No photo yet");
+    const setPhoto = (url) => { const img = el("img", { class: "mphoto", src: url, alt: "" }); photo.replaceWith(img); photo = img; };
+    const file = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true });
+    const up = el("button", {}, "Upload photo");
+    const pick = el("button", {}, "Choose uploaded…");
+    const name = el("input", { type: "text", value: m.name, maxLength: 60 });
+    const role = el("input", { type: "text", value: m.role, maxLength: 60, placeholder: "e.g. Lead Guitar" });
+    const bio = el("textarea", { rows: 7, maxLength: 5000, placeholder: "Leave a blank line between paragraphs." }); bio.value = m.bio;
+    const wrap = el("input", { type: "checkbox", checked: m.wrap });
+    const vis = el("input", { type: "checkbox", checked: m.visible });
+    const msg = el("span", { class: "msg" });
+    const save = el("button", { class: "primary" }, isNew ? "Add member" : "Save");
+    const unsaved = () => { msg.className = "msg"; msg.textContent = "Not saved yet."; };
+    [name, role, bio].forEach((x) => x.addEventListener("input", unsaved)); [wrap, vis].forEach((x) => x.addEventListener("change", unsaved));
+    up.addEventListener("click", () => file.click());
+    file.addEventListener("change", async () => {
+      const f = file.files[0]; if (!f) return;
+      const blob = await cropPhoto(f, { title: `Crop the photo${name.value.trim() ? " for " + name.value.trim() : ""}`, ratio: 1, maxSide: 1200 });
+      file.value = "";
+      if (!blob) return;
+      cropped = blob; setPhoto(URL.createObjectURL(blob)); unsaved();
+    });
+    pick.addEventListener("click", async () => {
+      const chosen = await pickPicture(`Choose a photo${name.value.trim() ? " for " + name.value.trim() : ""}`);
+      if (!chosen) return;
+      src = chosen; cropped = null; setPhoto(show(chosen)); unsaved();
+    });
+    save.addEventListener("click", async () => {
+      save.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
+      try {
+        if (cropped) { msg.textContent = "Uploading photo…"; src = await uploadBlob(cropped, "member"); cropped = null; }
+        const body = { name: name.value, role: role.value, src, bio: bio.value, wrap: wrap.checked, visible: vis.checked };
+        const d = isNew ? await api("/api/admin/members", { method: "POST", json: body }) : await api(`/api/admin/members/${m.id}`, { method: "PUT", json: body });
+        membersNow = d.members; renderAbout(); toast(isNew ? `Added ${body.name.trim()} to the end of the lineup` : "Saved");
+      } catch (e) { msg.className = "msg err"; msg.textContent = e.message; save.disabled = false; }
+    });
+    const tools = el("div", { class: "row" }, save, msg);
+    if (isNew) {
+      const cancel = el("button", {}, "Cancel");
+      cancel.addEventListener("click", () => { card.remove(); $("m-add").disabled = false; });
+      tools.append(cancel);
+    } else {
+      const left = el("button", { title: "Move earlier", disabled: i === 0 }, "← Earlier");
+      const right = el("button", { title: "Move later", disabled: i === n - 1 }, "Later →");
+      const del = el("button", { class: "danger" }, "Remove");
+      const move = (to) => { const ids = membersNow.map((x) => x.id); ids.splice(i, 1); ids.splice(to, 0, m.id); saveMemberOrder(ids); };
+      left.addEventListener("click", () => move(i - 1));
+      right.addEventListener("click", () => move(i + 1));
+      del.addEventListener("click", async () => {
+        if (!confirm(`Take ${m.name} out of the lineup?\n\nTheir photo stays in your uploaded pictures. To keep them here but off the site, untick "Show on the site" instead.`)) return;
+        try { const d = await api(`/api/admin/members/${m.id}`, { method: "DELETE" }); membersNow = d.members; renderAbout(); toast("Removed"); } catch (e) { toast(e.message); }
+      });
+      tools.append(el("span", { style: "flex:1" }), left, right, del);
+    }
+    const card = el("div", { class: "card mcard" + (isNew ? " is-new" : "") + (m.visible || isNew ? "" : " is-hidden") },
+      el("div", {}, photo, el("div", { class: "pics" }, up, pick, file)),
+      el("div", {},
+        isNew ? el("h4", { style: "margin:0 0 4px" }, "New member (goes at the end)") : "",
+        el("div", { class: "mfields" },
+          el("div", {}, el("label", {}, "Name"), name),
+          el("div", {}, el("label", {}, "Role"), role),
+          el("div", { class: "wide" }, el("label", {}, "Bio (shown when someone clicks their photo)"), bio)),
+        el("label", { class: "check" }, wrap, "In the bio popup, put the photo on the right with the text wrapping around it"),
+        el("label", { class: "check" }, vis, "Show on the site"),
+        tools));
+    return card;
+  }
+
   // ---------- Bands We Bring To Life ----------
   let bandsNow = [];
   // Same colour sum as the home page, so a band without a picture looks the same here
@@ -810,9 +959,9 @@
   // ---------- start ----------
   // Each admin page has its own address (/admin/flyers, /admin/gallery, /admin/requests, /admin/songs-we-play);
   // they're all this one file (the Worker serves it for each), showing just that page's section.
-  const PAGES = { flyers: "Flyers", gallery: "Gallery", bands: "Bands", requests: "Song requests", "songs-we-play": "Songs we play" };
+  const PAGES = { flyers: "Flyers", about: "About the band", gallery: "Gallery", bands: "Bands", requests: "Song requests", "songs-we-play": "Songs we play" };
   const slug = location.pathname.replace(/^\/admin\/?/, "").replace(/\/$/, "");
-  const pageKey = { "": "flyers", flyers: "flyers", gallery: "gallery", bands: "bands", requests: "requests", "songs-we-play": "played" }[slug] || "flyers";
+  const pageKey = { "": "flyers", flyers: "flyers", about: "about", gallery: "gallery", bands: "bands", requests: "requests", "songs-we-play": "played" }[slug] || "flyers";
   document.title = `${PAGES[slug] || "Flyers"} · AudioVox Admin`;
   document.querySelectorAll("[data-page]").forEach((n) => {
     if (n.tagName === "A") { n.classList.toggle("is-on", n.dataset.page === pageKey); if (n.dataset.page === pageKey) n.setAttribute("aria-current", "page"); }
@@ -824,11 +973,12 @@
       const d = await api("/api/admin/state");
       $("who").textContent = d.email;
       today = d.today || new Date().toISOString().slice(0, 10);
-      flyersNow = d.flyers; gallery = d.gallery; bandsNow = d.bands || [];
+      flyersNow = d.flyers; gallery = d.gallery; bandsNow = d.bands || []; membersNow = d.members || []; bandPhoto = d.bandPhoto || "";
       if (pageKey === "flyers") renderFlyers(d.flyers);
       if (pageKey === "gallery") renderGallery();
       if (pageKey === "bands") renderBands();
-      if (["flyers", "gallery", "bands"].includes(pageKey) && !d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
+      if (pageKey === "about") { bandPhoto = d.bandPhoto || ""; membersNow = d.members || []; renderAbout(); }
+      if (["flyers", "about", "gallery", "bands"].includes(pageKey) && !d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
       $("app").hidden = false;
       if (pageKey === "requests" || pageKey === "played") {
         try { setSongData(await api("/api/admin/songs")); }

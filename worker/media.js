@@ -1,4 +1,4 @@
-// Site photos managed from the admin page (admin.html): the hero flyers, the gallery and the "Bands We Bring To Life" tiles.
+// Site photos managed from the admin page (admin.html): the hero flyers, the gallery, the "Bands We Bring To Life" tiles and "About the band" (band photo + lineup).
 //
 // Settings live in the D1 database (binding "DB"); uploaded image files live in the R2 bucket (binding "MEDIA")
 // and are served from /media/<file>. The original photos in /images keep working: the database just points at them.
@@ -23,6 +23,11 @@
 //   PUT    /api/admin/bands/:id             { name, src, visible }  edit a band (src '' = no picture, just the colour tile)
 //   DELETE /api/admin/bands/:id                                     take a band off (its picture stays in the library)
 //   PUT    /api/admin/band-order            { ids: [...] }          new order
+//   PUT    /api/admin/band-photo            { src }                 the band photo in "About the band"
+//   POST   /api/admin/members               { name, role, src, bio, wrap, visible }  add a member (goes to the end)
+//   PUT    /api/admin/members/:id           { name, role, src, bio, wrap, visible }  edit a member
+//   DELETE /api/admin/members/:id                                   take a member off (the photo stays in the library)
+//   PUT    /api/admin/member-order          { ids: [...] }          new order
 //   GET    /api/admin/library                                       every picture that can be reused (uploads + built-in photos)
 //   DELETE /api/admin/library?src=/media/...                        delete an unused upload for good
 //
@@ -60,6 +65,22 @@ const START_BANDS = [
   ["Goo Goo Dolls", "goo-goo-dolls.jpg"], ["Jet", "jet.jpg"],
 ].map(([name, file]) => ({ name, src: `images/bands/${file}` }));
 const MAX_BANDS = 200;
+// "About the band": the band photo beside "Flannel. Feedback. Front Row Chaos." and the lineup (photo, name, role,
+// bio; wrap = in the bio popup the photo sits on the right with the text wrapping around it)
+const START_BAND_PHOTO = "images/about-band.jpg";
+const START_MEMBERS = [
+  { name: "Aaron", role: "Vocals", src: "images/member-aaron.jpg", wrap: 1,
+    bio: "Originally from Kingsport, Tennessee, Aaron has been involved in performing music since the age of 13, but it wasn’t until later in life that he discovered just how powerful his voice could be.\n\nA lifelong fan of ’90s rock, his influences include Pearl Jam, Soundgarden, Chris Cornell, Green Day, and R.E.M. (who were playing alternative rock before “alternative rock” was really a thing). That mix of grunge, alternative, and straight-ahead rock has shaped both his vocal style and the music he loves to perform.\n\nAs a founding member and lead vocalist of AudioVox, Aaron gets to channel those influences into the songs he grew up loving, bringing a powerful voice, emotion, and a genuine connection to the music to every show.\n\nOffstage, he’s a die-hard Clemson fan, husband and dad raising a teenage son and daughter, and spends his weekdays working for the man while dreaming daily about retirement. Until then, getting on stage with AudioVox is a pretty damn good escape." },
+  { name: "Jimmy", role: "Lead Guitar", src: "images/member-jimmy.jpg", wrap: 0,
+    bio: "Jimmy hails from Long Island NY and has been playing guitar since 1987. Jimmy grew up listening to all the greatest 80's metal bands and then when the 90's started he was a huge fan of Nirvana, Pearl Jam and Alice in Chains. Jimmy is a self-taught guitar player and brings so much energy to the band. Jimmy is a former member of Echo Alice and Thirteen:13 and is a founding member of AudioVox." },
+  { name: "Brian", role: "Drums", src: "images/member-brian.jpg", wrap: 1,
+    bio: "Brian is originally from Northern California and began playing drums in middle school. He moved to Charlotte in 2006 with the goal of bringing 90's rock to the people and has been playing gigs around the area ever since. Brian is a versatile musician who can play drums both loudly and very loudly. But don't ask him to sing." },
+  { name: "Curt", role: "Bass", src: "images/member-curt.jpg", wrap: 0,
+    bio: "Curt Baker as the bass player has been called many things over the years; Dad, husband, artist, terminated employee, arms trafficker (never indicted), Muzungu, but has never been called boring. Originally from Albuquerque but claims addresses in many parts of the USA, Mexico, and Africa, Curt took up bass playing at the spry age of 59. After recognizing that these kids have fostered a resurrection of the great music of the 1990’s, what was left to do is plug in a bass and remember arrangements." },
+  { name: "Rob", role: "Guitar/Vocals", src: "images/member-rob.jpg", wrap: 1,
+    bio: "Rob grew up in Northern New York, so close to Canada he could practically see it from his porch. In 1997 he moved to the Charlotte area in search of warmer weather and louder amps. He was learning guitar chords at five, then spent his teen years behind a drum kit before switching back to guitar. He also sings, which Brian is very grateful for. Along the way he's played with Barefoot Pilgrim and Exit 85, and now he's here with AudioVox, still chasing the sound of a decade he never really left. By his own math, Rob spends 50% of his time tuning, 30% playing it wrong, but that last 20% is where the magic happens." },
+];
+const MAX_MEMBERS = 20;
 
 let ready = null;
 function ensureSchema(db) {
@@ -78,7 +99,21 @@ function ensureSchema(db) {
         db.prepare(`CREATE TABLE IF NOT EXISTS site_bands (
           id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, src TEXT NOT NULL DEFAULT '',
           visible INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS site_members (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT '', src TEXT NOT NULL DEFAULT '',
+          bio TEXT NOT NULL DEFAULT '', wrap INTEGER NOT NULL DEFAULT 0, visible INTEGER NOT NULL DEFAULT 1,
+          sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
       ]);
+      // The lineup and the band photo go in once, ever, too.
+      if (!(await db.prepare("SELECT v FROM song_settings WHERE k = 'members_seeded'").first())) {
+        const now = Date.now();
+        await db.batch([
+          ...START_MEMBERS.map((m, i) => db.prepare("INSERT INTO site_members (name, role, src, bio, wrap, sort, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind(m.name, m.role, m.src, m.bio, m.wrap, i + 1, now)),
+          db.prepare("INSERT OR IGNORE INTO song_settings (k, v) VALUES ('band_photo', ?1)").bind(START_BAND_PHOTO),
+          db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('members_seeded', ?1)").bind(String(now)),
+        ]);
+      }
       // The bands list goes in once, ever, too.
       if (!(await db.prepare("SELECT v FROM song_settings WHERE k = 'bands_seeded'").first())) {
         const now = Date.now();
@@ -132,7 +167,10 @@ async function state(db) {
     .map((g) => ({ ...g, visible: !!g.visible }));
   const bands = (await db.prepare("SELECT id, name, src, visible FROM site_bands ORDER BY sort, id").all()).results
     .map((b) => ({ ...b, visible: !!b.visible }));
-  return { flyers, gallery, bands };
+  const members = (await db.prepare("SELECT id, name, role, src, bio, wrap, visible FROM site_members ORDER BY sort, id").all()).results
+    .map((m) => ({ ...m, wrap: !!m.wrap, visible: !!m.visible }));
+  const bandPhoto = (await db.prepare("SELECT v FROM song_settings WHERE k = 'band_photo'").first())?.v || "";
+  return { flyers, gallery, bands, members, bandPhoto };
 }
 
 // ---------- flyer dates ----------
@@ -248,7 +286,7 @@ export async function handleMedia(request, env, ctx) {
     // Upload one image (raw body, already shrunk by the admin page)
     if (parts[0] === "upload" && method === "POST") {
       if (!env.MEDIA) return json({ ok: false, error: "Photo storage (R2) isn't set up yet." }, 503);
-      const kind = ["flyer", "band"].includes(url.searchParams.get("kind")) ? url.searchParams.get("kind") : "gallery";
+      const kind = ["flyer", "band", "member", "about"].includes(url.searchParams.get("kind")) ? url.searchParams.get("kind") : "gallery";
       const type = (request.headers.get("Content-Type") || "").split(";")[0].trim();
       const ext = ALLOWED_TYPES[type];
       if (!ext) return json({ ok: false, error: "Please upload a JPG, PNG or WebP image." }, 400);
@@ -272,15 +310,15 @@ export async function handleMedia(request, env, ctx) {
         } while (cursor && files.length < 5000);
         files.sort((a, b) => b.uploaded - a.uploaded);
       }
-      const builtIn = [...new Set([...START_FLYERS.map((f) => f.src), ...START_GALLERY, ...START_BANDS.map((b) => b.src)])].map((src) => ({ src, builtIn: true }));
+      const builtIn = [...new Set([...START_FLYERS.map((f) => f.src), ...START_GALLERY, ...START_BANDS.map((b) => b.src), START_BAND_PHOTO, ...START_MEMBERS.map((m) => m.src)])].map((src) => ({ src, builtIn: true }));
       return json({ ok: true, files: [...files.filter((f) => okSrc(f.src)), ...builtIn] });
     }
     // Delete an uploaded picture for good (only when no flyer or gallery photo uses it; built-in photos can't be deleted).
     if (parts[0] === "library" && parts.length === 1 && method === "DELETE") {
       const src = clean(url.searchParams.get("src"), 300);
       if (!src.startsWith("/media/") || !okSrc(src)) return json({ ok: false, error: "Only uploaded pictures can be deleted." }, 400);
-      const { n } = await db.prepare("SELECT (SELECT COUNT(*) FROM site_gallery WHERE src = ?1) + (SELECT COUNT(*) FROM site_flyers WHERE src = ?1) + (SELECT COUNT(*) FROM site_bands WHERE src = ?1) AS n").bind(src).first();
-      if (n) return json({ ok: false, error: "That picture is still being used. Take it off the flyer, gallery photo or band first." }, 409);
+      const { n } = await db.prepare("SELECT (SELECT COUNT(*) FROM site_gallery WHERE src = ?1) + (SELECT COUNT(*) FROM site_flyers WHERE src = ?1) + (SELECT COUNT(*) FROM site_bands WHERE src = ?1) + (SELECT COUNT(*) FROM site_members WHERE src = ?1) + (SELECT COUNT(*) FROM song_settings WHERE k = 'band_photo' AND v = ?1) AS n").bind(src).first();
+      if (n) return json({ ok: false, error: "That picture is still being used. Take it off the flyer, gallery photo, band or member first." }, 409);
       if (env.MEDIA) await env.MEDIA.delete(src.slice("/media/".length));
       return json({ ok: true });
     }
@@ -331,6 +369,58 @@ export async function handleMedia(request, env, ctx) {
       }));
       if (stmts.length) await db.batch(stmts);
       return json({ ok: true, ...(await state(db)) });
+    }
+
+    // About the band: the band photo
+    if (parts[0] === "band-photo" && method === "PUT") {
+      let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+      const src = clean(d.src, 300);
+      if (!okSrc(src)) return json({ ok: false, error: "Choose a picture first." }, 400);
+      await db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('band_photo', ?1)").bind(src).run();
+      return json({ ok: true, ...(await state(db)) });
+    }
+    // About the band: members (add at the end / edit / take off / new order)
+    const memberInput = (d) => {
+      const m = { name: clean(d.name, 60), role: clean(d.role, 60), src: clean(d.src, 300),
+        bio: typeof d.bio === "string" ? d.bio.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, " ").trim().slice(0, 5000) : "",
+        wrap: d.wrap ? 1 : 0, visible: d.visible === false ? 0 : 1 };
+      if (!m.name) return { error: "Type the member's name." };
+      if (!okSrc(m.src)) return { error: "Choose a photo for the member." };
+      return m;
+    };
+    if (parts[0] === "members" && parts.length === 1 && method === "POST") {
+      let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+      const m = memberInput(d);
+      if (m.error) return json({ ok: false, error: m.error }, 400);
+      const { n, mx } = await db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(sort), 0) AS mx FROM site_members").first();
+      if (n >= MAX_MEMBERS) return json({ ok: false, error: "That's a big band! Remove a member first." }, 400);
+      await db.prepare("INSERT INTO site_members (name, role, src, bio, wrap, visible, sort, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)")
+        .bind(m.name, m.role, m.src, m.bio, m.wrap, m.visible, mx + 1, Date.now()).run();
+      return json({ ok: true, ...(await state(db)) });
+    }
+    if (parts[0] === "member-order" && method === "PUT") {
+      let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+      const ids = Array.isArray(d.ids) ? d.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, MAX_MEMBERS) : [];
+      if (ids.length) await db.batch(ids.map((id, i) => db.prepare("UPDATE site_members SET sort = ?1 WHERE id = ?2").bind(i + 1, id)));
+      return json({ ok: true, ...(await state(db)) });
+    }
+    if (parts[0] === "members" && parts.length === 2) {
+      const id = Number(parts[1]);
+      if (!Number.isInteger(id) || id < 1 || !(await db.prepare("SELECT 1 FROM site_members WHERE id = ?1").bind(id).first())) {
+        return json({ ok: false, error: "That member isn't there any more. Reload the page." }, 404);
+      }
+      if (method === "PUT") {
+        let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+        const m = memberInput(d);
+        if (m.error) return json({ ok: false, error: m.error }, 400);
+        await db.prepare("UPDATE site_members SET name = ?1, role = ?2, src = ?3, bio = ?4, wrap = ?5, visible = ?6 WHERE id = ?7")
+          .bind(m.name, m.role, m.src, m.bio, m.wrap, m.visible, id).run();
+        return json({ ok: true, ...(await state(db)) });
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM site_members WHERE id = ?1").bind(id).run();   // the photo stays in the library
+        return json({ ok: true, ...(await state(db)) });
+      }
     }
 
     // Bands We Bring To Life: add (at the end) / edit / take off / new order
@@ -470,6 +560,13 @@ function bandTilesHtml(bands) {
     (b.src ? `<img class="cover-band-photo" src="${escapeHtml(b.src)}" alt="" loading="lazy">` : "") +
     `<span class="cover-band-name">${escapeHtml(b.name)}</span></li>`).join("");
 }
+// "Meet The Band" cards. The bio and the popup layout ride along as data attributes for app.js's bio popup.
+function memberCardsHtml(members) {
+  return members.filter((m) => m.visible && m.name && m.src).map((m) =>
+    `<li class="band-member" data-bio="${escapeHtml(m.bio || "")}"${m.wrap ? ' data-wrap="1"' : ""}>` +
+    `<img src="${escapeHtml(m.src)}" alt="${escapeHtml(m.name)}" class="photo-fallback member-photo" data-fallback-label="${escapeHtml(m.src)}">` +
+    `<span class="member-name">${escapeHtml(m.name)}</span><span class="member-role">${escapeHtml(m.role || "")}</span></li>`).join("");
+}
 export async function homePage(request, env) {
   // Ask for the full file every time (no "has it changed?" check), since what we send depends on the settings.
   const headers = new Headers(request.headers);
@@ -493,6 +590,9 @@ export async function homePage(request, env) {
     .on("#next-shows", { element: (el) => { el.setInnerContent(piles, { html: true }); } })
     // data-filled tells app.js the tiles are already there (otherwise it builds its own built-in list)
     .on("#cover-bands-grid", { element: (el) => { el.setInnerContent(tiles, { html: true }); el.setAttribute("data-filled", "1"); } })
+    // the lineup (data-filled: app.js reads the bios from the cards instead of its built-in list)
+    .on("#band-members", { element: (el) => { el.setInnerContent(memberCardsHtml(s.members), { html: true }); el.setAttribute("data-filled", "1"); } })
+    .on("#about-band-photo", { element: (el) => { if (s.bandPhoto) { el.setAttribute("src", s.bandPhoto); el.setAttribute("data-fallback-label", s.bandPhoto); } } })
     .transform(page);
   const res = new Response(out.body, out);
   res.headers.delete("ETag");

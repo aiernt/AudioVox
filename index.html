@@ -105,7 +105,7 @@
         </div>
       </div>
       <div class="about-photo about-photo-band">
-        <img src="images/about-band.jpg" alt="AudioVox band portrait" class="photo-fallback photo-frame lightbox-trigger" data-fallback-label="images/about-band.jpg" data-lightbox-group="band">
+        <img src="images/about-band.jpg" id="about-band-photo" alt="AudioVox band portrait" class="photo-fallback photo-frame lightbox-trigger" data-fallback-label="images/about-band.jpg" data-lightbox-group="band">
         <div class="photo-tape"></div>
       </div>
     </div>
@@ -131,7 +131,8 @@
     <div class="section-inner band-grid">
       <p class="eyebrow">The Lineup</p>
       <h3 class="band-title">Meet The Band</h3>
-      <ul class="band-members">
+      <!-- The lineup is set in the admin page (About the band); the server fills this in. These are only shown if it can't. -->
+      <ul class="band-members" id="band-members">
         <li class="band-member">
           <img src="images/member-aaron.jpg" alt="Aaron" class="photo-fallback member-photo" data-fallback-label="images/member-aaron.jpg">
           <span class="member-name">Aaron</span>
@@ -376,6 +377,6 @@
 <a href="#top" id="back-to-top" class="back-to-top" aria-label="Back to top"></a>
 
 <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
-<script src="js/app.js?v=28"></script>
+<script src="js/app.js?v=29"></script>
 </body>
 </html>

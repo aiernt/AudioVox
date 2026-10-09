@@ -391,10 +391,9 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ---------- Member bio popup ----------
-// Click a band member's photo to open their bio. Add or edit bios here,
-// keyed by the member's name exactly as it appears under their photo.
+// Click a band member's photo to open their bio. The lineup and bios are set in the admin page (About the band):
+// the server puts each bio on its card (data-bio, data-wrap). The lists below are only the fallback for when it can't.
 // A member with an empty bio just shows their photo, name, and role.
-// NOTE: placeholder (lorem ipsum) text until the real bios are written.
 const MEMBER_BIOS = {
   Aaron: "Originally from Kingsport, Tennessee, Aaron has been involved in performing music since the age of 13, but it wasn’t until later in life that he discovered just how powerful his voice could be.\n\nA lifelong fan of ’90s rock, his influences include Pearl Jam, Soundgarden, Chris Cornell, Green Day, and R.E.M. (who were playing alternative rock before “alternative rock” was really a thing). That mix of grunge, alternative, and straight-ahead rock has shaped both his vocal style and the music he loves to perform.\n\nAs a founding member and lead vocalist of AudioVox, Aaron gets to channel those influences into the songs he grew up loving, bringing a powerful voice, emotion, and a genuine connection to the music to every show.\n\nOffstage, he’s a die-hard Clemson fan, husband and dad raising a teenage son and daughter, and spends his weekdays working for the man while dreaming daily about retirement. Until then, getting on stage with AudioVox is a pretty damn good escape.",
   Jimmy: "Jimmy hails from Long Island NY and has been playing guitar since 1987. Jimmy grew up listening to all the greatest 80's metal bands and then when the 90's started he was a huge fan of Nirvana, Pearl Jam and Alice in Chains. Jimmy is a self-taught guitar player and brings so much energy to the band. Jimmy is a former member of Echo Alice and Thirteen:13 and is a founding member of AudioVox.",
@@ -421,8 +420,10 @@ if (memberModal) {
     memberPhoto.alt = name;
     memberName.textContent = name;
     memberRole.textContent = card.querySelector(".member-role").textContent.trim();
-    const bio = (MEMBER_BIOS[name] || "").trim();
-    memberModal.querySelector(".member-card").classList.toggle("is-wrap-right", WRAP_AROUND_MEMBERS.includes(name));
+    const fromServer = "bio" in card.dataset;
+    const bio = (fromServer ? card.dataset.bio : MEMBER_BIOS[name] || "").trim();
+    const wrap = fromServer ? card.dataset.wrap === "1" : WRAP_AROUND_MEMBERS.includes(name);
+    memberModal.querySelector(".member-card").classList.toggle("is-wrap-right", wrap);
     memberCopy.textContent = bio;
     memberCopy.hidden = !bio;
     memberModal.hidden = false;
