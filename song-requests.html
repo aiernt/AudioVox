@@ -194,11 +194,6 @@
   }
   .sg-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;}
   .sl-empty{color:var(--grey);padding:14px 2px;}
-  .sl-del{flex:none;background:none;border:0;color:var(--grey-dim);font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.06em;padding:4px;}
-  .sl-del:hover{color:var(--red-glow);}
-  .sl-card .sl-del{position:absolute;left:8px;bottom:8px;z-index:3;background:rgba(10,10,11,.8);border-radius:4px;}
-  .sr-admin{display:inline-block;margin-top:24px;color:var(--grey);font-size:.85rem;text-decoration:underline;}
-  .sr-admin:hover{color:var(--cream);}
 </style>
 </head>
 <body>
@@ -281,14 +276,6 @@
   const statusEl = $("sg-status");
   // Messages show under the search box AND pop up, so a refused add is never missed.
   function say(t, ok) { statusEl.textContent = t || ""; statusEl.classList.toggle("is-ok", !!ok); if (t && !/^Searching/.test(t)) toast(t); }
-
-  // Band only: open the page once with #admin=YOUR_ADMIN_TOKEN to show Remove buttons and the export link.
-  let adminToken = "";
-  try {
-    const m = location.hash.match(/admin=([^&]+)/);
-    if (m) { localStorage.setItem("avSongAdmin", decodeURIComponent(m[1])); history.replaceState(null, "", location.pathname + location.search); }
-    adminToken = localStorage.getItem("avSongAdmin") || "";
-  } catch {}
 
   async function api(path, options = {}) {
     const res = await fetch(path, { ...options, headers: { ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) } });
@@ -396,16 +383,6 @@
     });
     return btn;
   }
-  function removeButton(s) {
-    const b = el("button", "sl-del", "Remove"); b.type = "button";
-    b.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (!confirm(`Remove "${s.song}" from the list? Its votes are removed too.`)) return;
-      try { setSongs((await api(`/api/songs/${s.id}`, { method: "DELETE", headers: { Authorization: "Bearer " + adminToken } })).songs); }
-      catch (err) { say(err.status === 403 ? "That admin key wasn’t accepted." : err.message); }
-    });
-    return b;
-  }
   function tagFor(s) {
     if (freshIds.has(s.id)) return el("span", "sl-tag is-new", "New");
     if (s.source === "fan") return el("span", "sl-tag", "Fan add");
@@ -417,7 +394,6 @@
     art.append(el("div", "ph", s.song.charAt(0)), el("span", "sl-rank", String(rank)));
     const tag = tagFor(s); if (tag) art.append(tag);
     art.append(playButton(s.sp));
-    if (adminToken) art.append(removeButton(s));
     if (s.art) { const img = new Image(); img.alt = `${s.song} album art`; img.referrerPolicy = "no-referrer"; img.src = s.art; img.onload = () => { const ph = art.querySelector(".ph"); if (ph) ph.remove(); art.prepend(img); }; }
     const body = el("div", "sl-body");
     body.append(el("div", "sl-song", s.song), el("div", "sl-artist", s.year ? `${s.artist} · ${s.year}` : s.artist));
@@ -437,7 +413,6 @@
     t.append(b, el("span", "a", s.year ? `${s.artist} · ${s.year}` : s.artist));
     li.append(t);
     if (s.sp) li.append(playButton(s.sp));
-    if (adminToken) li.append(removeButton(s));
     li.append(el("div", "v", String(s.votes)), voteButton(s));
     linkToSpotify(li, s.url);
     return li;
@@ -567,29 +542,6 @@
     }, 350);
   });
   q.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
-
-  // ---------- band only: export ----------
-  if (adminToken) {
-    const a = el("a", "sr-admin", "Download the list (spreadsheet)"); a.href = "#";
-    a.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const res = await fetch("/api/songs/export", { headers: { Authorization: "Bearer " + adminToken } });
-      if (!res.ok) { say("That admin key wasn’t accepted."); return; }
-      const blob = await res.blob(); const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob); link.download = `audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(link.href);
-    });
-    const t = el("a", "sr-admin", "Send a test email"); t.href = "#"; t.style.marginLeft = "18px";
-    t.addEventListener("click", async (e) => {
-      e.preventDefault(); t.textContent = "Sending…";
-      try {
-        const res = await fetch("/api/songs/test-email", { method: "POST", headers: { Authorization: "Bearer " + adminToken } });
-        const d = await res.json().catch(() => ({}));
-        alert(d.ok ? `Test email sent (Resend answered ${d.resendStatus}). Check your inbox and spam folder.` : (d.error || `Failed (${res.status}).`));
-      } finally { t.textContent = "Send a test email"; }
-    });
-    $("sr-rest").after(a);
-    a.after(t);
-  }
 
   loadList();
 })();

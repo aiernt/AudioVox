@@ -10,8 +10,9 @@
 //   GET    /media/<key>                     public: an uploaded image
 //   -- admin only (Cloudflare Access login, or "Authorization: Bearer <ADMIN_TOKEN>" for local testing):
 //   POST   /api/admin/upload?kind=...       upload one image (the page shrinks it first); returns its address
-//   POST   /api/admin/flyers                { src, alt, stamp, visible, side }  add a flyer (goes on top of that pile)
-//   PUT    /api/admin/flyers/:id            { src, alt, stamp, visible }  edit a flyer
+//   POST   /api/admin/flyers                { src, alt, stamp, visible, side, show_date, end_date }  add a flyer (on top of that pile)
+//   PUT    /api/admin/flyers/:id            { src, alt, stamp, visible, show_date, end_date }  edit a flyer
+//          show_date: the stamp appears the day after it. end_date: the flyer comes off the site that day.
 //   DELETE /api/admin/flyers/:id                                    take a flyer off (the picture stays in the library)
 //   PUT    /api/admin/flyer-order           { left: [ids], right: [ids] }  both piles, top first
 //   POST   /api/admin/gallery               { src, alt, caption }  add a photo (goes to the end)
@@ -48,7 +49,8 @@ function ensureSchema(db) {
         db.prepare(`CREATE TABLE IF NOT EXISTS site_flyers (
           slot INTEGER PRIMARY KEY, src TEXT NOT NULL DEFAULT '', alt TEXT NOT NULL DEFAULT '',
           stamp TEXT NOT NULL DEFAULT '', visible INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL DEFAULT 0,
-          side TEXT NOT NULL DEFAULT 'left', z INTEGER NOT NULL DEFAULT 0)`),
+          side TEXT NOT NULL DEFAULT 'left', z INTEGER NOT NULL DEFAULT 0,
+          show_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '')`),
         db.prepare(`CREATE TABLE IF NOT EXISTS site_gallery (
           id INTEGER PRIMARY KEY AUTOINCREMENT, src TEXT NOT NULL, alt TEXT NOT NULL DEFAULT '',
           caption TEXT NOT NULL DEFAULT '', sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
@@ -66,6 +68,13 @@ function ensureSchema(db) {
           db.prepare("ALTER TABLE site_flyers ADD COLUMN side TEXT NOT NULL DEFAULT 'left'"),
           db.prepare("ALTER TABLE site_flyers ADD COLUMN z INTEGER NOT NULL DEFAULT 0"),
           db.prepare("UPDATE site_flyers SET side = CASE WHEN slot = 2 THEN 'right' ELSE 'left' END, z = 1"),
+        ]);
+      }
+      // Added later: the show's date (the stamp only appears once it has passed) and the date to take it down.
+      if (!fcols.some((c) => c.name === "show_date")) {
+        await db.batch([
+          db.prepare("ALTER TABLE site_flyers ADD COLUMN show_date TEXT NOT NULL DEFAULT ''"),
+          db.prepare("ALTER TABLE site_flyers ADD COLUMN end_date TEXT NOT NULL DEFAULT ''"),
         ]);
       }
       // Copy today's flyers and gallery in once, ever (never again, even if every photo is later removed).
@@ -86,11 +95,25 @@ function ensureSchema(db) {
 
 async function state(db) {
   // Left pile then right pile, each from the top (front) down.
-  const flyers = (await db.prepare("SELECT slot AS id, src, alt, stamp, visible, side, z FROM site_flyers ORDER BY side, z DESC, slot").all()).results
+  const flyers = (await db.prepare("SELECT slot AS id, src, alt, stamp, visible, side, z, show_date, end_date FROM site_flyers ORDER BY side, z DESC, slot").all()).results
     .map((f) => ({ ...f, visible: !!f.visible }));
   const gallery = (await db.prepare("SELECT id, src, alt, caption, visible FROM site_gallery ORDER BY sort, id").all()).results
     .map((g) => ({ ...g, visible: !!g.visible }));
   return { flyers, gallery };
+}
+
+// ---------- flyer dates ----------
+// Dates are plain days (YYYY-MM-DD) where the band plays, so "today" is worked out in that time zone.
+const SHOW_TZ = "America/New_York";
+const todayLocal = () => new Intl.DateTimeFormat("en-CA", { timeZone: SHOW_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+const dateOrBlank = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+const badDates = (d) => { const s = dateOrBlank(d.show_date), e = dateOrBlank(d.end_date); return !!(s && e && e <= s); };
+// The flyers the site shows right now: switched on, with a picture, and not yet at their take-down date.
+// A flyer's stamp only shows once its show date has passed (always, if it has no show date).
+function liveFlyers(flyers, today = todayLocal()) {
+  return flyers
+    .filter((f) => f.visible && f.src && !(f.end_date && today >= f.end_date))
+    .map((f) => ({ ...f, stamp: f.stamp && (!f.show_date || today > f.show_date) ? f.stamp : "" }));
 }
 
 // ---------- admin check: Cloudflare Access login ----------
@@ -124,7 +147,7 @@ function sameSecret(a, b) {
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0;
 }
-async function isAdmin(request, env) {
+export async function isAdmin(request, env) {
   if (await accessEmail(request, env)) return true;
   return !!env.ADMIN_TOKEN && sameSecret(request.headers.get("Authorization") || "", `Bearer ${env.ADMIN_TOKEN}`);
 }
@@ -175,7 +198,7 @@ export async function handleMedia(request, env, ctx) {
       const s = await state(db);
       return json({
         ok: true,
-        flyers: s.flyers.filter((f) => f.visible && f.src).map(({ id, src, alt, stamp, side }) => ({ id, src, alt, stamp, side })),
+        flyers: liveFlyers(s.flyers).map(({ id, src, alt, stamp, side }) => ({ id, src, alt, stamp, side })),
         gallery: s.gallery.filter((g) => g.visible).map(({ id, src, alt, caption }) => ({ id, src, alt, caption })),
       });
     }
@@ -186,7 +209,7 @@ export async function handleMedia(request, env, ctx) {
 
     // Who am I / everything for the admin page
     if (parts[0] === "state" && method === "GET") {
-      return json({ ok: true, email: (await accessEmail(request, env)) || "local test", uploads: !!env.MEDIA, ...(await state(db)) });
+      return json({ ok: true, email: (await accessEmail(request, env)) || "local test", uploads: !!env.MEDIA, today: todayLocal(), ...(await state(db)) });
     }
 
     // Upload one image (raw body, already shrunk by the admin page)
@@ -234,11 +257,13 @@ export async function handleMedia(request, env, ctx) {
       let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
       const src = clean(d.src, 300);
       if (!okSrc(src)) return json({ ok: false, error: "Choose a picture for the flyer first." }, 400);
+      if (badDates(d)) return json({ ok: false, error: "The take-down date has to be after the show date." }, 400);
       const side = d.side === "right" ? "right" : "left";
       const { n, m } = await db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(z), 0) AS m FROM site_flyers WHERE side = ?1").bind(side).first();
       if (n >= MAX_FLYERS_PER_SIDE) return json({ ok: false, error: `That pile is full (${MAX_FLYERS_PER_SIDE} flyers). Remove one first.` }, 400);
-      await db.prepare("INSERT INTO site_flyers (src, alt, stamp, visible, updated_at, side, z) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
-        .bind(src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible === false ? 0 : 1, Date.now(), side, m + 1).run();
+      await db.prepare("INSERT INTO site_flyers (src, alt, stamp, visible, updated_at, side, z, show_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)")
+        .bind(src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible === false ? 0 : 1, Date.now(), side, m + 1,
+          dateOrBlank(d.show_date), dateOrBlank(d.end_date)).run();
       return json({ ok: true, ...(await state(db)) });
     }
     // Flyers: edit / take off
@@ -251,8 +276,10 @@ export async function handleMedia(request, env, ctx) {
         let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
         const src = clean(d.src, 300);
         if (!okSrc(src)) return json({ ok: false, error: "Choose a picture for the flyer first." }, 400);
-        await db.prepare("UPDATE site_flyers SET src = ?1, alt = ?2, stamp = ?3, visible = ?4, updated_at = ?5 WHERE slot = ?6")
-          .bind(src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible ? 1 : 0, Date.now(), id).run();
+      if (badDates(d)) return json({ ok: false, error: "The take-down date has to be after the show date." }, 400);
+        await db.prepare("UPDATE site_flyers SET src = ?1, alt = ?2, stamp = ?3, visible = ?4, updated_at = ?5, show_date = ?6, end_date = ?7 WHERE slot = ?8")
+          .bind(src, clean(d.alt, 200) || "Upcoming show flyer", clean(d.stamp, 20), d.visible ? 1 : 0, Date.now(),
+            dateOrBlank(d.show_date), dateOrBlank(d.end_date), id).run();
         return json({ ok: true, ...(await state(db)) });
       }
       if (method === "DELETE") {
@@ -374,7 +401,7 @@ export async function homePage(request, env) {
     return page;
   }
 
-  const piles = flyerPilesHtml(flyers);
+  const piles = flyerPilesHtml(liveFlyers(flyers));
   const out = new HTMLRewriter()
     .on("#next-shows", { element: (el) => { el.setInnerContent(piles, { html: true }); } })
     .transform(page);

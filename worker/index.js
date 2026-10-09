@@ -14,7 +14,7 @@
 //   BOOKING_FROM    (text)    sender, e.g. "AudioVox Website <bookings@yourdomain.com>"
 //                             (the domain must be verified in Resend)
 
-import { handleSongs } from "./songs.js";
+import { handleSongs, handleSongsAdmin } from "./songs.js";
 import { handleMedia, homePage } from "./media.js";
 
 const MAX = { name: 120, email: 200, phone: 60, date: 40, venue: 200, details: 4000 };
@@ -110,6 +110,10 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/songs" || pathname.startsWith("/api/songs/")) {
       return handleSongs(request, env, ctx);
+    }
+    // Admin page: song requests and the songs-we-play list (songs.js); everything else admin is photos (media.js)
+    if (/^\/api\/admin\/(songs|known)(\/|$)/.test(pathname)) {
+      return handleSongsAdmin(request, env, ctx);
     }
     if (pathname === "/api/media" || pathname.startsWith("/api/admin/") || pathname.startsWith("/media/")) {
       return handleMedia(request, env, ctx);

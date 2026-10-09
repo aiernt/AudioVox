@@ -30,7 +30,30 @@
   .flyer img{width:100%;max-height:300px;object-fit:contain;background:#eee;border-radius:4px;display:block;}
   .flyer .noimg{height:200px;display:flex;align-items:center;justify-content:center;background:#eee;color:var(--muted);border-radius:4px;}
   label{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 3px;}
-  input[type=text]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:4px;font:inherit;}
+  input[type=text],input[type=date],input[type=search]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:4px;font:inherit;}
+  .dates{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;}
+  .status{margin:10px 0 0;padding:6px 10px;border-radius:4px;background:#eef6f0;color:var(--ok);font-size:.85rem;}
+  .status.off{background:#f1f1ef;color:var(--muted);}
+  /* section links under the header */
+  .jump{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:.9rem;margin:0 0 4px;}
+  .jump a{color:var(--red);}
+  h2{scroll-margin-top:12px;}
+  /* song tables */
+  .tbl-wrap{overflow-x:auto;padding:0;margin-top:12px;}
+  .tbl{width:100%;border-collapse:collapse;font-size:.9rem;}
+  .tbl th{text-align:left;font-weight:600;color:var(--muted);font-size:.8rem;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;}
+  .tbl td{padding:6px 10px;border-bottom:1px solid #eee;vertical-align:middle;}
+  .tbl tr:last-child td{border-bottom:0;}
+  .tbl .num{color:var(--muted);text-align:right;width:1%;white-space:nowrap;}
+  .tbl .acts{white-space:nowrap;text-align:right;}
+  .tbl button{padding:4px 9px;font-size:.82rem;}
+  .tbl input[type=text]{padding:4px 7px;}
+  .tbl .check{margin:0;font-size:.85rem;white-space:nowrap;}
+  .badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;background:#fdecef;color:var(--red);font-size:.75rem;white-space:nowrap;}
+  .known-add{display:grid;grid-template-columns:1fr 1fr auto auto;gap:10px;align-items:end;}
+  .known-add label{margin-top:0;}
+  .known-add .check{margin:0 0 8px;}
+  @media (max-width:700px){.known-add{grid-template-columns:1fr;}}
   .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;}
   button,.btn{font:inherit;padding:7px 14px;border-radius:4px;border:1px solid var(--line);background:#fff;cursor:pointer;}
   button.primary{background:var(--red);border-color:var(--red);color:#fff;}
@@ -81,11 +104,12 @@
 </header>
 
 <main id="app" hidden>
-  <h2>Flyers</h2>
-  <p class="hint">The flyers sit in two piles on the home page, left and right. The top flyer in each pile is in front; the ones under it peek out behind at an angle. Clicking any flyer on the site opens them all full size. Changes show on the site straight away.</p>
+  <nav class="jump"><a href="#flyers-h">Flyers</a><a href="#gallery-h">Gallery</a><a href="#songs-h">Song requests</a><a href="#known-h">Songs we play</a></nav>
+  <h2 id="flyers-h">Flyers</h2>
+  <p class="hint">The flyers sit in two piles on the home page, left and right. The top flyer in each pile is in front; the ones under it peek out behind at an angle. Clicking any flyer on the site opens them all full size. Give a flyer its show date and its stamp (like ROCKED!) appears by itself the day after the show; give it a take-down date and it comes off the site that day. Changes show on the site straight away.</p>
   <div class="flyers" id="flyers"></div>
 
-  <h2>Gallery</h2>
+  <h2 id="gallery-h">Gallery</h2>
   <p class="hint">The photos in the &ldquo;Live Shots&rdquo; carousel. Drag photos to change the order (or use the arrows). Big photos are shrunk automatically before uploading. A yellow border means the photo has no description yet. Untick &ldquo;Show in the carousel&rdquo; to keep a photo here without showing it on the site.</p>
   <div class="card upload">
     <input type="file" id="g-files" accept="image/jpeg,image/png,image/webp" multiple>
@@ -95,6 +119,26 @@
     <span class="msg" id="g-msg"></span>
   </div>
   <ul class="gallery" id="gallery"></ul>
+
+  <h2 id="songs-h">Song requests <span class="hint" id="s-count"></span></h2>
+  <p class="hint">Songs fans have asked for on the <a href="/song-requests" target="_blank">Songs We Should Learn</a> page, most votes first. &ldquo;We learned it&rdquo; adds the song to <a href="#known-h">Songs we play</a> (so it can't be requested again) and takes it off this list.</p>
+  <div class="card upload">
+    <button id="s-export">Download the list (spreadsheet)</button>
+    <button id="s-test">Send a test email</button>
+    <span class="msg" id="s-msg"></span>
+  </div>
+  <div class="card tbl-wrap"><table class="tbl" id="s-table"></table></div>
+
+  <h2 id="known-h">Songs we play <span class="hint" id="k-count"></span></h2>
+  <p class="hint">Fans can't request these; the song page says &ldquo;We play this one!&rdquo; instead. A song is matched by its title, so cover versions by other bands are caught too. For common titles (like &ldquo;Black&rdquo; or &ldquo;Higher&rdquo;), tick &ldquo;Artist must match&rdquo; so only that band's song is blocked.</p>
+  <div class="card known-add">
+    <div><label for="k-song">Song</label><input type="text" id="k-song" maxlength="200"></div>
+    <div><label for="k-artist">Artist</label><input type="text" id="k-artist" maxlength="200"></div>
+    <label class="check"><input type="checkbox" id="k-strict"> Artist must match</label>
+    <button class="primary" id="k-add">Add song</button>
+  </div>
+  <div class="row"><input type="search" id="k-filter" placeholder="Find a song in the list&hellip;" style="max-width:340px"></div>
+  <div class="card tbl-wrap"><table class="tbl" id="k-table"></table></div>
 </main>
 <div class="denied card" id="denied" hidden></div>
 <div class="picker" id="picker" hidden>
@@ -192,7 +236,20 @@
   // ---------- flyers: two piles (left and right); each pile is listed top first (the top one is in front) ----------
   const pileOf = (side) => flyersNow.filter((f) => f.side === side);
   const sideName = (side) => (side === "right" ? "Right" : "Left");
-  function flyerLabel(f) { return `${sideName(f.side)} pile #${pileOf(f.side).indexOf(f) + 1}${f.visible ? "" : " (hidden)"}`; }
+  // Dates: "today" comes from the server (where the band plays), dates are YYYY-MM-DD
+  let today = "";
+  const niceDate = (d) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const dayAfter = (d) => { const t = new Date(d + "T12:00:00"); t.setDate(t.getDate() + 1); return t.toISOString().slice(0, 10); };
+  const takenDown = (f) => !!(f.end_date && today >= f.end_date);
+  function flyerStatus(f) {
+    if (!f.visible) return { off: true, text: "Not on the site (switched off)" };
+    if (takenDown(f)) return { off: true, text: `Not on the site: taken down ${niceDate(f.end_date)}` };
+    const bits = ["On the site"];
+    if (f.stamp) bits.push(!f.show_date || today > f.show_date ? `“${f.stamp}” stamp showing` : `“${f.stamp}” stamp appears ${niceDate(dayAfter(f.show_date))}`);
+    if (f.end_date) bits.push(`comes down ${niceDate(f.end_date)}`);
+    return { off: false, text: bits.join(" · ") };
+  }
+  function flyerLabel(f) { return `${sideName(f.side)} pile #${pileOf(f.side).indexOf(f) + 1}${!f.visible ? " (hidden)" : takenDown(f) ? " (taken down)" : ""}`; }
   async function saveFlyerOrder(left, right, done) {
     try { const d = await api("/api/admin/flyer-order", { method: "PUT", json: { left, right } }); renderFlyers(d.flyers); toast(done || "Order saved"); }
     catch (e) { toast(e.message); }
@@ -207,7 +264,7 @@
         el("h3", {}, `${sideName(side)} pile `, el("span", { class: "hint" }, pile.length ? "· top of the pile first" : "· empty")),
         add);
       add.addEventListener("click", () => {
-        add.after(flyerCard({ id: 0, side, src: "", alt: "Upcoming show flyer", stamp: "", visible: true }, 0, 0, () => { add.disabled = false; }));
+        add.after(flyerCard({ id: 0, side, src: "", alt: "Upcoming show flyer", stamp: "", visible: true, show_date: "", end_date: "" }, 0, 0, () => { add.disabled = false; }));
         add.disabled = true;
       });
       pile.forEach((f, i) => col.append(flyerCard(f, i, pile.length)));
@@ -225,6 +282,8 @@
     const alt = el("input", { type: "text", value: f.alt, maxLength: 200 });
     const stamp = el("input", { type: "text", value: f.stamp, maxLength: 20, placeholder: "e.g. ROCKED!  (leave blank for no stamp)" });
     const vis = el("input", { type: "checkbox", checked: f.visible });
+    const showDate = el("input", { type: "date", value: f.show_date || "" });
+    const endDate = el("input", { type: "date", value: f.end_date || "" });
     const msg = el("span", { class: "msg" });
     const save = el("button", { class: "primary" }, isNew ? "Add flyer" : "Save");
     file.addEventListener("change", () => { if (file.files[0]) { setPreview(URL.createObjectURL(file.files[0])); msg.className = "msg"; msg.textContent = "Click " + save.textContent + " to use it."; } });
@@ -239,7 +298,8 @@
       try {
         if (file.files[0]) { msg.textContent = "Uploading picture…"; src = await upload(file.files[0], "flyer"); file.value = ""; }
         if (!src) throw new Error("Choose a picture first.");
-        const body = { src, alt: alt.value, stamp: stamp.value, visible: vis.checked };
+        if (showDate.value && endDate.value && endDate.value <= showDate.value) throw new Error("The take-down date has to be after the show date.");
+        const body = { src, alt: alt.value, stamp: stamp.value, visible: vis.checked, show_date: showDate.value, end_date: endDate.value };
         const d = isNew
           ? await api("/api/admin/flyers", { method: "POST", json: { ...body, side: f.side } })
           : await api(`/api/admin/flyers/${f.id}`, { method: "PUT", json: body });
@@ -272,12 +332,17 @@
     }
 
     const title = isNew ? "New flyer (goes on top)" : i === 0 ? "#1 · top of the pile" : `#${i + 1}`;
-    const card = el("div", { class: "card flyer" + (isNew ? " is-new" : "") + (f.visible ? "" : " is-hidden") },
-      el("h4", {}, title, f.visible ? "" : el("span", { class: "hint" }, " · hidden")),
+    const status = isNew ? null : flyerStatus(f);
+    const card = el("div", { class: "card flyer" + (isNew ? " is-new" : "") + (status && status.off ? " is-hidden" : "") },
+      el("h4", {}, title),
       preview,
+      status ? el("div", { class: "status" + (status.off ? " off" : "") }, status.text) : "",
       el("label", {}, isNew ? "Picture" : "Replace picture"), file, el("div", { class: "or" }, "or"), pick,
       el("label", {}, "Description (for screen readers)"), alt,
-      el("label", {}, "Stamp text"), stamp,
+      el("label", {}, "Stamp text (shows the day after the show date, or always if there's no show date)"), stamp,
+      el("div", { class: "dates" },
+        el("div", {}, el("label", {}, "Show date"), showDate),
+        el("div", {}, el("label", {}, "Take it down on"), endDate)),
       el("label", { class: "check" }, vis, "Show this flyer on the site"),
       el("div", { class: "row" }, save, msg),
       tools);
@@ -372,14 +437,101 @@
     } catch (e) { toast(e.message); }
   });
 
+  // ---------- song requests and the songs we play ----------
+  let songsNow = [], knownNow = [];
+  function setSongData(d) { songsNow = d.songs; knownNow = d.known; renderSongs(); renderKnown(); }
+  const td = (...kids) => el("td", {}, ...kids);
+  function renderSongs() {
+    $("s-count").textContent = `· ${songsNow.length} song${songsNow.length === 1 ? "" : "s"}`;
+    const t = $("s-table"); t.replaceChildren();
+    if (!songsNow.length) { t.append(el("tr", {}, el("td", { class: "hint" }, "No requests yet."))); return; }
+    t.append(el("tr", {}, ...["#", "Song", "Artist", "Year", "Votes", "Added by", "Added on", ""].map((h) => el("th", {}, h))));
+    songsNow.forEach((s, i) => {
+      const learned = el("button", { title: "Add it to Songs we play and take it off the requests" }, "We learned it");
+      const del = el("button", { class: "danger" }, "Remove");
+      learned.addEventListener("click", async () => {
+        if (!confirm(`Move “${s.song}” to Songs we play?\n\nIt comes off the request list (with its ${s.votes} vote${s.votes === 1 ? "" : "s"}) and fans can't request it again.`)) return;
+        try { setSongData(await api(`/api/admin/songs/${s.id}/learned`, { method: "POST" })); toast(`“${s.song}” is now on Songs we play`); } catch (e) { toast(e.message); }
+      });
+      del.addEventListener("click", async () => {
+        if (!confirm(`Remove “${s.song}” from the request list? Its votes go too.`)) return;
+        try { setSongData(await api(`/api/admin/songs/${s.id}`, { method: "DELETE" })); toast("Removed"); } catch (e) { toast(e.message); }
+      });
+      const title = s.url ? el("a", { href: s.url, target: "_blank", rel: "noopener" }, s.song) : s.song;
+      t.append(el("tr", {},
+        el("td", { class: "num" }, String(i + 1)),
+        td(title, s.known ? el("span", { class: "badge", title: "This matches a song on Songs we play, so fans can't add it now" }, "we play this") : ""),
+        td(s.artist), td(s.year ? String(s.year) : ""), el("td", { class: "num" }, String(s.votes)),
+        td(s.source === "band" ? "Band" : "Fan"), td(new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })),
+        el("td", { class: "acts" }, learned, " ", del)));
+    });
+  }
+  function renderKnown() {
+    $("k-count").textContent = `· ${knownNow.length} song${knownNow.length === 1 ? "" : "s"}`;
+    const q = $("k-filter").value.trim().toLowerCase();
+    const list = q ? knownNow.filter((k) => (k.song + " " + k.artist).toLowerCase().includes(q)) : knownNow;
+    const t = $("k-table"); t.replaceChildren();
+    t.append(el("tr", {}, ...["Song", "Artist", "", ""].map((h) => el("th", {}, h))));
+    if (!list.length) t.append(el("tr", {}, el("td", { class: "hint", colSpan: 4 }, q ? "No match." : "No songs yet.")));
+    list.forEach((k) => {
+      const song = el("input", { type: "text", value: k.song, maxLength: 200 });
+      const artist = el("input", { type: "text", value: k.artist, maxLength: 200 });
+      const strict = el("input", { type: "checkbox", checked: k.strict });
+      const save = el("button", { disabled: true }, "Save");
+      const del = el("button", { class: "danger" }, "Remove");
+      const changed = () => { save.disabled = song.value === k.song && artist.value === k.artist && strict.checked === k.strict; };
+      [song, artist].forEach((x) => x.addEventListener("input", changed)); strict.addEventListener("change", changed);
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        try { setSongData(await api(`/api/admin/known/${k.id}`, { method: "PUT", json: { song: song.value, artist: artist.value, strict: strict.checked } })); toast("Saved"); }
+        catch (e) { toast(e.message); changed(); }
+      });
+      del.addEventListener("click", async () => {
+        if (!confirm(`Take “${k.song}” off Songs we play? Fans will be able to request it again.`)) return;
+        try { setSongData(await api(`/api/admin/known/${k.id}`, { method: "DELETE" })); toast("Removed"); } catch (e) { toast(e.message); }
+      });
+      t.append(el("tr", {}, td(song), td(artist), td(el("label", { class: "check" }, strict, "Artist must match")), el("td", { class: "acts" }, save, " ", del)));
+    });
+  }
+  $("k-filter").addEventListener("input", renderKnown);
+  $("k-add").addEventListener("click", async () => {
+    const btn = $("k-add"); btn.disabled = true;
+    try {
+      setSongData(await api("/api/admin/known", { method: "POST", json: { song: $("k-song").value, artist: $("k-artist").value, strict: $("k-strict").checked } }));
+      toast(`Added “${$("k-song").value.trim()}”`);
+      $("k-song").value = ""; $("k-artist").value = ""; $("k-strict").checked = false; $("k-song").focus();
+    } catch (e) { toast(e.message); }
+    finally { btn.disabled = false; }
+  });
+  ["k-song", "k-artist"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") $("k-add").click(); }));
+  $("s-export").addEventListener("click", async () => {
+    const msg = $("s-msg"); msg.className = "msg"; msg.textContent = "";
+    try {
+      const res = await fetch("/api/admin/songs/export", { headers: token ? { Authorization: "Bearer " + token } : {}, credentials: "same-origin" });
+      if (!res.ok) throw new Error(res.status === 403 ? "Please sign in again." : `Couldn't download it (${res.status}).`);
+      const link = el("a", { href: URL.createObjectURL(await res.blob()), download: `audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv` });
+      link.click(); URL.revokeObjectURL(link.href);
+    } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+  });
+  $("s-test").addEventListener("click", async () => {
+    const btn = $("s-test"), msg = $("s-msg"); btn.disabled = true; msg.className = "msg"; msg.textContent = "Sending…";
+    try {
+      const d = await api("/api/admin/songs/test-email", { method: "POST" });
+      msg.className = "msg ok"; msg.textContent = `Test email sent. Check your inbox (and the spam folder).${d.songNotify === "off" ? " Note: new-song emails are switched off (SONG_NOTIFY)." : ""}`;
+    } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+    finally { btn.disabled = false; }
+  });
+
   // ---------- start ----------
   (async () => {
     try {
       const d = await api("/api/admin/state");
       $("who").textContent = `Signed in: ${d.email}`;
       if (!d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
+      today = d.today || new Date().toISOString().slice(0, 10);
       renderFlyers(d.flyers); gallery = d.gallery; renderGallery();
       $("app").hidden = false;
+      try { setSongData(await api("/api/admin/songs")); } catch (e) { $("s-msg").className = "msg err"; $("s-msg").textContent = "Couldn't load the song lists: " + e.message; }
     } catch (e) {
       const box = $("denied"); box.hidden = false;
       box.append(el("h2", { style: "margin-top:0" }, "Not signed in"), el("p", {}, e.status === 403 ? "This page is only for the band. Please sign in again." : e.message));

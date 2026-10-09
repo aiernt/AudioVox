@@ -5,7 +5,7 @@
 // already on the list. Every rule is checked here, on the server, so it can't be skipped:
 //   - songs released from 1989 to now
 //   - no songs with an explicit word spelled out in the TITLE (explicit lyrics and masked spellings are fine)
-//   - songs the band already plays (KNOWN_SONGS) can't be requested
+//   - songs the band already plays (the known_songs table, edited in the admin page) can't be requested
 //   - a quick math check before adding, 5 new songs per visitor per hour, one vote per song per visitor
 //   - every added song is looked up on Spotify by the server, so made-up songs can't be added
 //
@@ -16,16 +16,22 @@
 //   POST   /api/songs                 add a song {sp: Spotify track id, unlock}; a listed song just gets a vote
 //   POST   /api/songs/:id/vote        vote for a song
 //   DELETE /api/songs/:id/vote        take your vote back
-//   -- band only ("Authorization: Bearer <ADMIN_TOKEN>"; open /song-requests#admin=TOKEN once per device):
-//   DELETE /api/songs/:id             remove a song
-//   GET    /api/songs/export          download the list as a spreadsheet (CSV)
-//   POST   /api/songs/test-email      send a test "new song" email and show Resend's reply
+//   -- band only, from the admin page (signed in through Cloudflare Access; see isAdmin in media.js):
+//   GET    /api/admin/songs                    every requested song + the "songs we play" list
+//   DELETE /api/admin/songs/:id                remove a requested song (and its votes)
+//   POST   /api/admin/songs/:id/learned        "we learned it": add it to the songs we play, take it off the requests
+//   GET    /api/admin/songs/export             download the requests as a spreadsheet (CSV)
+//   POST   /api/admin/songs/test-email         send a test "new song" email and show Resend's reply
+//   POST   /api/admin/known                    { song, artist, strict }  add a song the band plays
+//   PUT    /api/admin/known/:id                { song, artist, strict }  edit one
+//   DELETE /api/admin/known/:id                remove one
 //
 // Settings (Cloudflare dashboard -> Workers & Pages -> audiovox -> Settings -> Variables and secrets):
 //   SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET  (secrets) the Spotify app keys
-//   ADMIN_TOKEN  (secret) lets the band remove songs and export the list
 //   SONG_NOTIFY  (text)   emails BOOKING_TO via Resend when a fan adds a song. On by default; "off" turns it off.
 //   VOTE_SALT    (secret) optional extra salt for the hashed visitor ids
+
+import { isAdmin } from "./media.js";
 
 const MIN_YEAR = 1989;
 const LIST_LIMIT = 500;            // most songs the list will hold (stops a flood)
@@ -38,9 +44,10 @@ const UNLOCK_TTL = 4 * 3600 * 1000;
 const HOUR = 3600 * 1000;
 const SEARCH_CACHE_SECONDS = 6 * 3600;
 
-// Songs the band already plays. Most match by TITLE alone, so cover versions by other artists are caught too.
-// Entries marked true have a very common title (e.g. "Higher", "Black"), so they also need the artist to match.
-const KNOWN_SONGS = [
+// Songs the band already plays: the STARTING list, copied into the known_songs table once (then edited in the
+// admin page). Most match by TITLE alone, so cover versions by other artists are caught too. Entries marked true
+// have a very common title (e.g. "Higher", "Black"), so they also need the artist to match ("strict").
+const START_KNOWN_SONGS = [
   ["Plush", "Stone Temple Pilots"], ["Flagpole Sitta", "Harvey Danger"], ["All the Small Things", "blink-182"],
   ["Inside Out", "Eve 6", true], ["When I Come Around", "Green Day"], ["Say It Ain't So", "Weezer"],
   ["Everlong", "Foo Fighters"], ["Hemorrhage (In My Hands)", "Fuel"], ["Creep", "Radiohead"],
@@ -86,23 +93,24 @@ const songKey = (song, artist) => `${titleKey(song)}|${artistKey(artist)}`;
 const explicitTitle = (song) => blockedTitleRx.test(String(song).normalize("NFKD").replace(/[̀-ͯ]/g, ""));
 const inYearRange = (year) => year >= MIN_YEAR && year <= new Date().getUTCFullYear();
 
-const knownByTitle = new Set(KNOWN_SONGS.filter((k) => !k[2]).map((k) => titleKey(k[0])));
-const knownStrict = KNOWN_SONGS.filter((k) => k[2]).map((k) => ({ title: titleKey(k[0]), artist: artistKey(k[1]) }));
-function isKnown(song, artist) {
-  const t = titleKey(song);
-  if (knownByTitle.has(t)) return true;
-  const a = norm(artist);
-  return knownStrict.some((k) => k.title === t && a.includes(k.artist));
+// The songs the band plays, from the database: [{ id, song, artist, strict }]
+async function knownList(db) {
+  const { results } = await db.prepare("SELECT id, song, artist, strict FROM known_songs ORDER BY song COLLATE NOCASE, artist COLLATE NOCASE").all();
+  return results.map((r) => ({ ...r, strict: !!r.strict }));
+}
+// Returns isKnown(song, artist) for that list.
+function knownMatcher(list) {
+  const byTitle = new Set(list.filter((k) => !k.strict).map((k) => titleKey(k.song)));
+  const strict = list.filter((k) => k.strict).map((k) => ({ title: titleKey(k.song), artist: artistKey(k.artist) }));
+  return (song, artist) => {
+    const t = titleKey(song);
+    if (byTitle.has(t)) return true;
+    const a = norm(artist);
+    return strict.some((k) => k.title === t && a.includes(k.artist));
+  };
 }
 
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-function sameSecret(a, b) {
-  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-const isAdmin = (request, env) => !!env.ADMIN_TOKEN && sameSecret(request.headers.get("Authorization") || "", `Bearer ${env.ADMIN_TOKEN}`);
 
 // A visitor is only ever stored as a salted hash of their IP address. The raw IP is never saved.
 async function visitorId(request, env) {
@@ -213,6 +221,9 @@ function ensureSchema(db) {
         db.prepare(`CREATE TABLE IF NOT EXISTS song_unlocks (token TEXT PRIMARY KEY, voter TEXT NOT NULL, expires INTEGER NOT NULL)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS song_hits (voter TEXT NOT NULL, bucket INTEGER NOT NULL, n INTEGER NOT NULL, PRIMARY KEY (voter, bucket))`),
         db.prepare(`CREATE TABLE IF NOT EXISTS song_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS known_songs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, song TEXT NOT NULL, artist TEXT NOT NULL DEFAULT '',
+          strict INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
         db.prepare("CREATE INDEX IF NOT EXISTS idx_songs_rank ON songs (votes DESC, created_at ASC)"),
         db.prepare("CREATE INDEX IF NOT EXISTS idx_song_votes_voter ON song_votes (voter, created_at)"),
       ]);
@@ -232,6 +243,15 @@ function ensureSchema(db) {
             .bind(songKey(song, artist), song, artist, year, now + i)) : [];
         writes.push(db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('seeded', ?1)").bind(String(now)));
         await db.batch(writes);
+      }
+      // The songs the band plays go in once, ever, too (after that they're edited in the admin page).
+      if (!(await db.prepare("SELECT v FROM song_settings WHERE k = 'known_seeded'").first())) {
+        const now = Date.now();
+        await db.batch([
+          ...START_KNOWN_SONGS.map(([song, artist, strict], i) =>
+            db.prepare("INSERT INTO known_songs (song, artist, strict, created_at) VALUES (?1, ?2, ?3, ?4)").bind(song, artist, strict ? 1 : 0, now + i)),
+          db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('known_seeded', ?1)").bind(String(now)),
+        ]);
       }
     })().catch((err) => { schemaReady = null; throw err; });
   }
@@ -353,7 +373,8 @@ export async function handleSongs(request, env, ctx) {
     // GET /api/songs
     if (parts.length === 2 && method === "GET") {
       ctx.waitUntil(backfillSpotify(env, ctx, url.host, db).catch((e) => console.error("backfill", e.message)));
-      return json({ ok: true, songs: await listSongs(db, voter), known: KNOWN_SONGS });
+      const known = (await knownList(db)).map((k) => [k.song, k.artist, k.strict]);
+      return json({ ok: true, songs: await listSongs(db, voter), known });
     }
 
     // GET /api/songs/search?q=
@@ -363,27 +384,6 @@ export async function handleSongs(request, env, ctx) {
       if (await overLimit(db, voter, "search", SEARCHES_PER_MINUTE, 60000)) return json({ ok: false, error: "Slow down a little and try again in a moment." }, 429);
       try { return json({ ok: true, results: await spotifySearch(env, ctx, url.host, q) }); }
       catch (err) { console.error("Spotify search", err.message); return json({ ok: false, error: "Search isn’t available right now. Please try again in a moment." }, 502); }
-    }
-
-    // GET /api/songs/export  (band only)
-    if (parts.length === 3 && parts[2] === "export" && method === "GET") {
-      if (!isAdmin(request, env)) return json({ ok: false, error: "Not allowed" }, 403);
-      const { results } = await db.prepare("SELECT id, song, artist, year, votes, source, url, created_at FROM songs ORDER BY votes DESC, created_at ASC").all();
-      const rows = [["Rank", "Song", "Artist", "Year", "Votes", "Added by", "Spotify link", "Added on"]]
-        .concat(results.map((r, i) => [i + 1, r.song, r.artist, r.year || "", r.votes, r.source === "band" ? "Band" : "Fan", r.url, new Date(r.created_at).toISOString().slice(0, 10)]));
-      return new Response("﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n"), { headers: {
-        "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store",
-        "Content-Disposition": `attachment; filename="audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv"` } });
-    }
-
-    // POST /api/songs/test-email  (band only): sends one test "new song" email and returns Resend's answer
-    if (parts.length === 3 && parts[2] === "test-email" && method === "POST") {
-      if (!isAdmin(request, env)) return json({ ok: false, error: "Not allowed" }, 403);
-      const missing = ["RESEND_API_KEY", "BOOKING_TO", "BOOKING_FROM"].filter((k) => !env[k]);
-      if (missing.length) return json({ ok: false, error: `Missing setting(s): ${missing.join(", ")}` }, 500);
-      const r = await songEmail(env, { song: "TEST - please ignore", artist: "AudioVox website", year: "", url: "" }, url.origin);
-      return json({ ok: r.ok, resendStatus: r.status, resendReply: r.body, songNotify: env.SONG_NOTIFY || "(not set = on)",
-        error: r.ok ? undefined : `Resend refused it (${r.status}): ${r.body}` }, r.ok ? 200 : 502);
     }
 
     // GET /api/songs/challenge
@@ -434,7 +434,7 @@ export async function handleSongs(request, env, ctx) {
       if (!t.id || !t.song || !t.artist) return json({ ok: false, error: "We couldn’t find that song. Try searching again." }, 404);
       if (!inYearRange(t.year)) return json({ ok: false, error: `We only add songs from ${MIN_YEAR} on.` }, 400);
       if (explicitTitle(t.song)) return json({ ok: false, error: "Sorry, we can’t add that one to the list." }, 400);
-      if (isKnown(t.song, t.artist)) return json({ ok: false, code: "known", error: `We already play “${t.song}”! Come catch it at a show.` }, 409);
+      if (knownMatcher(await knownList(db))(t.song, t.artist)) return json({ ok: false, code: "known", error: `We already play “${t.song}”! Come catch it at a show.` }, 409);
 
       const key = songKey(t.song, t.artist);
       const existing = await db.prepare("SELECT id FROM songs WHERE key = ?1").bind(key).first();
@@ -473,21 +473,122 @@ export async function handleSongs(request, env, ctx) {
       return json({ ok: true, counted: changed, songs: await listSongs(db, voter) });
     }
 
-    // DELETE /api/songs/:id  (band only)
-    if (parts.length === 3 && method === "DELETE") {
-      if (!isAdmin(request, env)) return json({ ok: false, error: "Not allowed" }, 403);
-      const id = Number(parts[2]);
+    return json({ ok: false, error: "Not found" }, 404);
+  } catch (err) {
+    console.error("Songs error", err && err.message ? err.message : err);
+    return json({ ok: false, error: "Something went wrong. Please try again." }, 500);
+  }
+}
+
+// ---------- band only: the admin page (/api/admin/songs*, /api/admin/known*) ----------
+async function adminState(db) {
+  const known = await knownList(db);
+  const isKnown = knownMatcher(known);
+  const { results } = await db.prepare("SELECT id, song, artist, year, votes, source, url, created_at FROM songs ORDER BY votes DESC, created_at ASC").all();
+  // "known" flags a requested song the band now plays, so it can be cleared off the list
+  return { ok: true, songs: results.map((r) => ({ ...r, known: isKnown(r.song, r.artist) })), known };
+}
+const removeSong = (db, id) => db.batch([
+  db.prepare("DELETE FROM song_votes WHERE song_id = ?1").bind(id),
+  db.prepare("DELETE FROM songs WHERE id = ?1").bind(id),
+]);
+function knownInput(d) {
+  const song = typeof d.song === "string" ? d.song.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, 200) : "";
+  const artist = typeof d.artist === "string" ? d.artist.replace(/[\u0000-\u001F\u007F]/g, " ").trim().slice(0, 200) : "";
+  const strict = !!d.strict;
+  if (!titleKey(song)) return { error: "Type the song's title." };
+  if (strict && !artistKey(artist)) return { error: "Type the artist too (needed when the artist has to match)." };
+  return { song, artist, strict };
+}
+async function knownDuplicate(db, song, artist, exceptId = 0) {
+  return (await knownList(db)).find((k) => k.id !== exceptId && titleKey(k.song) === titleKey(song) && artistKey(k.artist) === artistKey(artist));
+}
+
+export async function handleSongsAdmin(request, env, ctx) {
+  const url = new URL(request.url);
+  const method = request.method;
+  const parts = url.pathname.replace(/\/+$/, "").split("/").filter(Boolean).slice(2);   // after "api/admin": ["songs", ...] or ["known", ...]
+  if (!env.DB) return json({ ok: false, error: "The song list isn't set up yet." }, 503);
+  if (method !== "GET") {
+    const origin = request.headers.get("Origin");
+    if (origin && new URL(origin).host !== url.host) return json({ ok: false, error: "Forbidden" }, 403);
+  }
+  if (!(await isAdmin(request, env))) return json({ ok: false, error: "Please sign in again." }, 403);
+
+  try {
+    await ensureSchema(env.DB);
+    const db = env.DB;
+    const [area, a1, a2] = parts;
+
+    if (area === "songs") {
+      if (!a1 && method === "GET") return json(await adminState(db));
+
+      // download the requests as a spreadsheet
+      if (a1 === "export" && !a2 && method === "GET") {
+        const { results } = await db.prepare("SELECT id, song, artist, year, votes, source, url, created_at FROM songs ORDER BY votes DESC, created_at ASC").all();
+        const rows = [["Rank", "Song", "Artist", "Year", "Votes", "Added by", "Spotify link", "Added on"]]
+          .concat(results.map((r, i) => [i + 1, r.song, r.artist, r.year || "", r.votes, r.source === "band" ? "Band" : "Fan", r.url, new Date(r.created_at).toISOString().slice(0, 10)]));
+        return new Response("﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n"), { headers: {
+          "Content-Type": "text/csv; charset=utf-8", "Cache-Control": "no-store",
+          "Content-Disposition": `attachment; filename="audiovox-song-requests-${new Date().toISOString().slice(0, 10)}.csv"` } });
+      }
+
+      // send one test "new song" email and return Resend's answer
+      if (a1 === "test-email" && !a2 && method === "POST") {
+        const missing = ["RESEND_API_KEY", "BOOKING_TO", "BOOKING_FROM"].filter((k) => !env[k]);
+        if (missing.length) return json({ ok: false, error: `Missing setting(s): ${missing.join(", ")}` }, 500);
+        const r = await songEmail(env, { song: "TEST - please ignore", artist: "AudioVox website", year: "", url: "" }, url.origin);
+        return json({ ok: r.ok, resendStatus: r.status, songNotify: env.SONG_NOTIFY || "(not set = on)",
+          error: r.ok ? undefined : `Resend refused it (${r.status}): ${r.body}` }, r.ok ? 200 : 502);
+      }
+
+      const id = Number(a1);
       if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: "Not found" }, 404);
-      await db.batch([
-        db.prepare("DELETE FROM song_votes WHERE song_id = ?1").bind(id),
-        db.prepare("DELETE FROM songs WHERE id = ?1").bind(id),
-      ]);
-      return json({ ok: true, songs: await listSongs(db, voter) });
+      const row = await db.prepare("SELECT song, artist FROM songs WHERE id = ?1").bind(id).first();
+      if (!row) return json({ ok: false, error: "That song isn't on the list any more. Reload the page." }, 404);
+
+      // remove a requested song
+      if (!a2 && method === "DELETE") { await removeSong(db, id); return json(await adminState(db)); }
+
+      // "we learned it": goes on the songs-we-play list (this artist's version) and comes off the requests
+      if (a2 === "learned" && method === "POST") {
+        if (!(await knownDuplicate(db, row.song, row.artist))) {
+          await db.prepare("INSERT INTO known_songs (song, artist, strict, created_at) VALUES (?1, ?2, 0, ?3)").bind(row.song, row.artist, Date.now()).run();
+        }
+        await removeSong(db, id);
+        return json(await adminState(db));
+      }
+    }
+
+    if (area === "known") {
+      if (!a1 && method === "POST") {
+        let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+        const k = knownInput(d);
+        if (k.error) return json({ ok: false, error: k.error }, 400);
+        if (await knownDuplicate(db, k.song, k.artist)) return json({ ok: false, error: `“${k.song}” is already on the list.` }, 409);
+        await db.prepare("INSERT INTO known_songs (song, artist, strict, created_at) VALUES (?1, ?2, ?3, ?4)").bind(k.song, k.artist, k.strict ? 1 : 0, Date.now()).run();
+        return json(await adminState(db));
+      }
+      const id = Number(a1);
+      if (!Number.isInteger(id) || id < 1 || a2) return json({ ok: false, error: "Not found" }, 404);
+      if (!(await db.prepare("SELECT 1 FROM known_songs WHERE id = ?1").bind(id).first())) return json({ ok: false, error: "That song isn't on the list any more. Reload the page." }, 404);
+      if (method === "PUT") {
+        let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+        const k = knownInput(d);
+        if (k.error) return json({ ok: false, error: k.error }, 400);
+        if (await knownDuplicate(db, k.song, k.artist, id)) return json({ ok: false, error: `“${k.song}” is already on the list.` }, 409);
+        await db.prepare("UPDATE known_songs SET song = ?1, artist = ?2, strict = ?3 WHERE id = ?4").bind(k.song, k.artist, k.strict ? 1 : 0, id).run();
+        return json(await adminState(db));
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM known_songs WHERE id = ?1").bind(id).run();
+        return json(await adminState(db));
+      }
     }
 
     return json({ ok: false, error: "Not found" }, 404);
   } catch (err) {
-    console.error("Songs error", err && err.message ? err.message : err);
+    console.error("Songs admin error", err && err.message ? err.message : err);
     return json({ ok: false, error: "Something went wrong. Please try again." }, 500);
   }
 }
