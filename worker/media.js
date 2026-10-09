@@ -1,4 +1,4 @@
-// Site photos managed from the admin page (admin.html): the hero flyers and the gallery.
+// Site photos managed from the admin page (admin.html): the hero flyers, the gallery and the "Bands We Bring To Life" tiles.
 //
 // Settings live in the D1 database (binding "DB"); uploaded image files live in the R2 bucket (binding "MEDIA")
 // and are served from /media/<file>. The original photos in /images keep working: the database just points at them.
@@ -19,6 +19,10 @@
 //   PUT    /api/admin/gallery/:id           { alt, caption } and/or { visible }   edit a photo's text / show or hide it
 //   PUT    /api/admin/gallery-order         { ids: [...] }          new order
 //   DELETE /api/admin/gallery/:id                                   take a photo out of the gallery (the picture stays in the library)
+//   POST   /api/admin/bands                 { name, src, visible }  add a band to "Bands We Bring To Life" (goes to the end)
+//   PUT    /api/admin/bands/:id             { name, src, visible }  edit a band (src '' = no picture, just the colour tile)
+//   DELETE /api/admin/bands/:id                                     take a band off (its picture stays in the library)
+//   PUT    /api/admin/band-order            { ids: [...] }          new order
 //   GET    /api/admin/library                                       every picture that can be reused (uploads + built-in photos)
 //   DELETE /api/admin/library?src=/media/...                        delete an unused upload for good
 //
@@ -40,6 +44,22 @@ const START_FLYERS = [
 ];
 const MAX_FLYERS_PER_SIDE = 10;
 const START_GALLERY = Array.from({ length: 33 }, (_, i) => `images/gallery/gallery-${i + 1}.jpg`);
+// "Bands We Bring To Life": [name, picture file in images/bands]
+const START_BANDS = [
+  ["Stone Temple Pilots", "stone-temple-pilots.jpg"], ["Harvey Danger", "harvey-danger.jpg"], ["Blink 182", "blink-182.jpg"],
+  ["Eve 6", "eve-6.jpg"], ["Weezer", "weezer.jpg"], ["Foo Fighters", "foo-fighters.jpg"], ["Fuel", "fuel.jpg"],
+  ["Radiohead", "radiohead.jpg"], ["Creed", "creed.jpg"], ["Green Day", "green-day.jpg"], ["Pearl Jam", "pearl-jam.jpg"],
+  ["Better Than Ezra", "better-than-ezra.jpg"], ["Spacehog", "spacehog.jpg"], ["Seven Mary 3", "seven-mary-3.jpg"],
+  ["Everclear", "everclear.jpg"], ["Toadies", "toadies.jpg"], ["Kings of Leon", "kings-of-leon.jpg"], ["Sublime", "sublime.jpg"],
+  ["Rage Against the Machine", "rage-against-the-machine.jpg"], ["HIM", "him.jpg"], ["Lenny Kravitz", "lenny-kravitz.jpg"],
+  ["Bowling for Soup", "bowling-for-soup.jpg"], ["Blur", "blur.jpg"], ["Nirvana", "nirvana.jpg"], ["Lifehouse", "lifehouse.jpg"],
+  ["Matchbox 20", "matchbox-20.jpg"], ["Eagle-Eye Cherry", "eagle-eye-cherry.jpg"], ["Violent Femmes", "violent-femmes.jpg"],
+  ["Soundgarden", "soundgarden.jpg"], ["Collective Soul", "collective-soul.jpg"], ["Lemonheads", "lemonheads.jpg"],
+  ["3 Doors Down", "3-doors-down.jpg"], ["Audioslave", "audioslave.jpg"], ["The Killers", "the-killers.jpg"], ["Local H", "local-h.jpg"],
+  ["Lit", "lit.jpg"], ["James", "james.jpg"], ["Finger Eleven", "finger-eleven.jpg"], ["Beastie Boys", "beastie-boys.jpg"],
+  ["Goo Goo Dolls", "goo-goo-dolls.jpg"], ["Jet", "jet.jpg"],
+].map(([name, file]) => ({ name, src: `images/bands/${file}` }));
+const MAX_BANDS = 200;
 
 let ready = null;
 function ensureSchema(db) {
@@ -55,7 +75,18 @@ function ensureSchema(db) {
           id INTEGER PRIMARY KEY AUTOINCREMENT, src TEXT NOT NULL, alt TEXT NOT NULL DEFAULT '',
           caption TEXT NOT NULL DEFAULT '', sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
         db.prepare(`CREATE TABLE IF NOT EXISTS song_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)`),
+        db.prepare(`CREATE TABLE IF NOT EXISTS site_bands (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, src TEXT NOT NULL DEFAULT '',
+          visible INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)`),
       ]);
+      // The bands list goes in once, ever, too.
+      if (!(await db.prepare("SELECT v FROM song_settings WHERE k = 'bands_seeded'").first())) {
+        const now = Date.now();
+        await db.batch([
+          ...START_BANDS.map((b, i) => db.prepare("INSERT INTO site_bands (name, src, sort, created_at) VALUES (?1, ?2, ?3, ?4)").bind(b.name, b.src, i + 1, now)),
+          db.prepare("INSERT OR REPLACE INTO song_settings (k, v) VALUES ('bands_seeded', ?1)").bind(String(now)),
+        ]);
+      }
       // Added later: a gallery photo can be kept but left out of the carousel (visible = 0).
       const cols = (await db.prepare("PRAGMA table_info(site_gallery)").all()).results;
       if (!cols.some((c) => c.name === "visible")) {
@@ -99,7 +130,9 @@ async function state(db) {
     .map((f) => ({ ...f, visible: !!f.visible }));
   const gallery = (await db.prepare("SELECT id, src, alt, caption, visible FROM site_gallery ORDER BY sort, id").all()).results
     .map((g) => ({ ...g, visible: !!g.visible }));
-  return { flyers, gallery };
+  const bands = (await db.prepare("SELECT id, name, src, visible FROM site_bands ORDER BY sort, id").all()).results
+    .map((b) => ({ ...b, visible: !!b.visible }));
+  return { flyers, gallery, bands };
 }
 
 // ---------- flyer dates ----------
@@ -215,7 +248,7 @@ export async function handleMedia(request, env, ctx) {
     // Upload one image (raw body, already shrunk by the admin page)
     if (parts[0] === "upload" && method === "POST") {
       if (!env.MEDIA) return json({ ok: false, error: "Photo storage (R2) isn't set up yet." }, 503);
-      const kind = url.searchParams.get("kind") === "flyer" ? "flyer" : "gallery";
+      const kind = ["flyer", "band"].includes(url.searchParams.get("kind")) ? url.searchParams.get("kind") : "gallery";
       const type = (request.headers.get("Content-Type") || "").split(";")[0].trim();
       const ext = ALLOWED_TYPES[type];
       if (!ext) return json({ ok: false, error: "Please upload a JPG, PNG or WebP image." }, 400);
@@ -239,15 +272,15 @@ export async function handleMedia(request, env, ctx) {
         } while (cursor && files.length < 5000);
         files.sort((a, b) => b.uploaded - a.uploaded);
       }
-      const builtIn = [...new Set([...START_FLYERS.map((f) => f.src), ...START_GALLERY])].map((src) => ({ src, builtIn: true }));
+      const builtIn = [...new Set([...START_FLYERS.map((f) => f.src), ...START_GALLERY, ...START_BANDS.map((b) => b.src)])].map((src) => ({ src, builtIn: true }));
       return json({ ok: true, files: [...files.filter((f) => okSrc(f.src)), ...builtIn] });
     }
     // Delete an uploaded picture for good (only when no flyer or gallery photo uses it; built-in photos can't be deleted).
     if (parts[0] === "library" && parts.length === 1 && method === "DELETE") {
       const src = clean(url.searchParams.get("src"), 300);
       if (!src.startsWith("/media/") || !okSrc(src)) return json({ ok: false, error: "Only uploaded pictures can be deleted." }, 400);
-      const { n } = await db.prepare("SELECT (SELECT COUNT(*) FROM site_gallery WHERE src = ?1) + (SELECT COUNT(*) FROM site_flyers WHERE src = ?1) AS n").bind(src).first();
-      if (n) return json({ ok: false, error: "That picture is still being used. Take it out of the gallery or flyer first." }, 409);
+      const { n } = await db.prepare("SELECT (SELECT COUNT(*) FROM site_gallery WHERE src = ?1) + (SELECT COUNT(*) FROM site_flyers WHERE src = ?1) + (SELECT COUNT(*) FROM site_bands WHERE src = ?1) AS n").bind(src).first();
+      if (n) return json({ ok: false, error: "That picture is still being used. Take it off the flyer, gallery photo or band first." }, 409);
       if (env.MEDIA) await env.MEDIA.delete(src.slice("/media/".length));
       return json({ ok: true });
     }
@@ -300,6 +333,45 @@ export async function handleMedia(request, env, ctx) {
       return json({ ok: true, ...(await state(db)) });
     }
 
+    // Bands We Bring To Life: add (at the end) / edit / take off / new order
+    if (parts[0] === "bands" && parts.length === 1 && method === "POST") {
+      let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+      const name = clean(d.name, 80), src = clean(d.src, 300);
+      if (!name) return json({ ok: false, error: "Type the band's name." }, 400);
+      if (src && !okSrc(src)) return json({ ok: false, error: "That image address isn't allowed." }, 400);
+      const { n, m } = await db.prepare("SELECT COUNT(*) AS n, COALESCE(MAX(sort), 0) AS m FROM site_bands").first();
+      if (n >= MAX_BANDS) return json({ ok: false, error: "That's a lot of bands! Remove one first." }, 400);
+      if (await db.prepare("SELECT 1 FROM site_bands WHERE lower(name) = lower(?1)").bind(name).first()) return json({ ok: false, error: `${name} is already on the list.` }, 409);
+      await db.prepare("INSERT INTO site_bands (name, src, visible, sort, created_at) VALUES (?1, ?2, ?3, ?4, ?5)")
+        .bind(name, src, d.visible === false ? 0 : 1, m + 1, Date.now()).run();
+      return json({ ok: true, ...(await state(db)) });
+    }
+    if (parts[0] === "band-order" && method === "PUT") {
+      let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+      const ids = Array.isArray(d.ids) ? d.ids.map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, MAX_BANDS) : [];
+      if (ids.length) await db.batch(ids.map((id, i) => db.prepare("UPDATE site_bands SET sort = ?1 WHERE id = ?2").bind(i + 1, id)));
+      return json({ ok: true, ...(await state(db)) });
+    }
+    if (parts[0] === "bands" && parts.length === 2) {
+      const id = Number(parts[1]);
+      if (!Number.isInteger(id) || id < 1 || !(await db.prepare("SELECT 1 FROM site_bands WHERE id = ?1").bind(id).first())) {
+        return json({ ok: false, error: "That band isn't there any more. Reload the page." }, 404);
+      }
+      if (method === "PUT") {
+        let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
+        const name = clean(d.name, 80), src = clean(d.src, 300);
+        if (!name) return json({ ok: false, error: "Type the band's name." }, 400);
+        if (src && !okSrc(src)) return json({ ok: false, error: "That image address isn't allowed." }, 400);
+        if (await db.prepare("SELECT 1 FROM site_bands WHERE lower(name) = lower(?1) AND id <> ?2").bind(name, id).first()) return json({ ok: false, error: `${name} is already on the list.` }, 409);
+        await db.prepare("UPDATE site_bands SET name = ?1, src = ?2, visible = ?3 WHERE id = ?4").bind(name, src, d.visible ? 1 : 0, id).run();
+        return json({ ok: true, ...(await state(db)) });
+      }
+      if (method === "DELETE") {
+        await db.prepare("DELETE FROM site_bands WHERE id = ?1").bind(id).run();   // the picture stays in the library
+        return json({ ok: true, ...(await state(db)) });
+      }
+    }
+
     // Gallery: add
     if (parts[0] === "gallery" && parts.length === 1 && method === "POST") {
       let d; try { d = await readJson(request); } catch { return json({ ok: false, error: "Invalid request." }, 400); }
@@ -348,8 +420,9 @@ export async function handleMedia(request, env, ctx) {
   }
 }
 
-// The home page (/) with the flyer piles built in, so a hidden flyer is never sent and nothing flashes on screen.
-// If the database can't be read, the page is sent as-is (with the two original flyers that are written into index.html).
+// The home page (/) with the flyer piles and the band tiles built in, so a hidden flyer is never sent and nothing
+// flashes on screen. If the database can't be read, the page is sent as-is (with the two original flyers that are
+// written into index.html, and app.js builds the built-in band list).
 const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 // Where each flyer in a pile sits, by depth (0 = top of the pile). Angles and offsets are for the left pile;
@@ -384,6 +457,19 @@ function flyerPilesHtml(flyers) {
     return `<div class="flyer-pile flyer-pile-${side}">${boxes.reverse().join("")}</div>`;
   }).join("");
 }
+// "Bands We Bring To Life" tiles. A band with no picture shows a colour gradient worked out from its name
+// (the same sum as hueFromName in app.js).
+function bandHue(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return Math.abs(hash) % 360;
+}
+function bandTilesHtml(bands) {
+  return bands.filter((b) => b.visible && b.name).map((b) =>
+    `<li class="cover-band-art" style="--hue:${bandHue(b.name)}">` +
+    (b.src ? `<img class="cover-band-photo" src="${escapeHtml(b.src)}" alt="" loading="lazy">` : "") +
+    `<span class="cover-band-name">${escapeHtml(b.name)}</span></li>`).join("");
+}
 export async function homePage(request, env) {
   // Ask for the full file every time (no "has it changed?" check), since what we send depends on the settings.
   const headers = new Headers(request.headers);
@@ -392,18 +478,21 @@ export async function homePage(request, env) {
   const page = await env.ASSETS.fetch(new Request(request, { headers }));
   if (page.status !== 200 || !(page.headers.get("Content-Type") || "").includes("text/html") || !env.DB) return page;
 
-  let flyers;
+  let s;
   try {
     await ensureSchema(env.DB);
-    flyers = (await state(env.DB)).flyers;
+    s = await state(env.DB);
   } catch (err) {
-    console.error("Home page flyers", err && err.message ? err.message : err);
+    console.error("Home page flyers/bands", err && err.message ? err.message : err);
     return page;
   }
 
-  const piles = flyerPilesHtml(liveFlyers(flyers));
+  const piles = flyerPilesHtml(liveFlyers(s.flyers));
+  const tiles = bandTilesHtml(s.bands);
   const out = new HTMLRewriter()
     .on("#next-shows", { element: (el) => { el.setInnerContent(piles, { html: true }); } })
+    // data-filled tells app.js the tiles are already there (otherwise it builds its own built-in list)
+    .on("#cover-bands-grid", { element: (el) => { el.setInnerContent(tiles, { html: true }); el.setAttribute("data-filled", "1"); } })
     .transform(page);
   const res = new Response(out.body, out);
   res.headers.delete("ETag");

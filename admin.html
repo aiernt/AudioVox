@@ -70,6 +70,16 @@
   .known-add label{margin-top:0;}
   .known-add .check{margin:0 0 8px;}
   @media (max-width:700px){.known-add{grid-template-columns:1fr;}}
+  /* bands: each card shows the tile the way the home page does (picture, or a colour made from the name) */
+  .band-add{display:flex;flex-direction:column;gap:10px;max-width:640px;}
+  .band-add label{margin-top:0;}
+  .bands{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));}
+  .btile{position:relative;aspect-ratio:4/3;border-radius:4px;overflow:hidden;display:flex;align-items:flex-end;cursor:grab;
+    background:linear-gradient(150deg,hsl(var(--hue) 70% 34%),hsl(calc(var(--hue) + 35) 65% 14%));}
+  .btile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;aspect-ratio:auto;border-radius:0;}
+  .btile span{position:relative;width:100%;padding:16px 8px 8px;background:linear-gradient(0deg,rgba(0,0,0,.9) 15%,transparent);color:#fff;font-weight:700;text-align:center;line-height:1.15;}
+  .gitem.is-hidden .btile{opacity:.4;}
+  .gitem .pics{display:flex;gap:6px;flex-wrap:wrap;}
   .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;}
   button,.btn{font:inherit;padding:7px 14px;border-radius:4px;border:1px solid var(--line);background:#fff;cursor:pointer;}
   button.primary{background:var(--red);border-color:var(--red);color:#fff;}
@@ -119,6 +129,7 @@
   <nav class="pages" aria-label="Admin pages">
     <a href="/admin/flyers" data-page="flyers">Flyers</a>
     <a href="/admin/gallery" data-page="gallery">Gallery</a>
+    <a href="/admin/bands" data-page="bands">Bands</a>
     <a href="/admin/requests" data-page="requests">Song requests</a>
     <a href="/admin/songs-we-play" data-page="played">Songs we play</a>
   </nav>
@@ -143,6 +154,17 @@
       <span class="msg" id="g-msg"></span>
     </div>
     <ul class="gallery" id="gallery"></ul>
+  </section>
+
+  <section data-page="bands" hidden>
+    <h2>Bands We Bring To Life <span class="hint" id="b-count"></span></h2>
+    <p class="hint">The band tiles on the home page, in this order. Drag a tile (or use the arrows) to move a band. A band with no picture gets a colour tile. Untick &ldquo;Show on the site&rdquo; to keep a band here without showing it.</p>
+    <div class="card band-add">
+      <div><label for="b-name">Band name</label><input type="text" id="b-name" maxlength="80"></div>
+      <div><label>Picture (optional)</label><div class="row" style="margin:0"><input type="file" id="b-file" accept="image/jpeg,image/png,image/webp"><span class="or">or</span><button id="b-pick">Choose an uploaded picture&hellip;</button></div></div>
+      <div class="row" style="margin:0"><button class="primary" id="b-add">Add band</button><span class="msg" id="b-msg"></span></div>
+    </div>
+    <ul class="gallery bands" id="bands"></ul>
   </section>
 
   <section data-page="requests" hidden>
@@ -205,8 +227,8 @@
     c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
     return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
   }
-  async function upload(file, kind) {
-    const blob = await shrink(file);
+  async function upload(file, kind, maxSide = 2000) {
+    const blob = await shrink(file, maxSide);
     return (await api(`/api/admin/upload?kind=${kind}`, { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } })).src;
   }
   const show = (src) => (src.startsWith("/") ? src : "/" + src);
@@ -215,6 +237,7 @@
   let flyersNow = [];
   function usedBy(src) {
     const u = flyersNow.filter((f) => f.src === src).map(flyerLabel);
+    bandsNow.filter((b) => b.src === src).forEach((b) => u.push(`Band: ${b.name}${b.visible ? "" : " (hidden)"}`));
     const gi = gallery.findIndex((g) => g.src === src);
     if (gi >= 0) u.push(`Gallery #${gi + 1}${gallery[gi].visible ? "" : " (hidden)"}`);
     return u;
@@ -466,6 +489,112 @@
     } catch (e) { toast(e.message); }
   });
 
+  // ---------- Bands We Bring To Life ----------
+  let bandsNow = [];
+  // Same colour sum as the home page, so a band without a picture looks the same here
+  const bandHue = (name) => { let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h); return Math.abs(h) % 360; };
+  const bandTile = (name, src) => {
+    const tile = el("div", { class: "btile", title: "Drag to move this band" }, src ? el("img", { src: show(src), alt: "", loading: "lazy", draggable: false }) : "", el("span", {}, name));
+    tile.style.setProperty("--hue", bandHue(name));
+    return tile;
+  };
+  async function saveBandOrder(ids) { try { const d = await api("/api/admin/band-order", { method: "PUT", json: { ids } }); bandsNow = d.bands; renderBands(); toast("Order saved"); } catch (e) { toast(e.message); } }
+  // Saves one band's settings; changes = the fields that change (the rest stay as saved)
+  async function saveBand(b, changes, done) {
+    const d = await api(`/api/admin/bands/${b.id}`, { method: "PUT", json: { name: b.name, src: b.src, visible: b.visible, ...changes } });
+    bandsNow = d.bands; renderBands(); if (done) toast(done);
+  }
+  function renderBands() {
+    $("b-count").textContent = `· ${bandsNow.filter((b) => b.visible).length} on the site` + (bandsNow.some((b) => !b.visible) ? `, ${bandsNow.filter((b) => !b.visible).length} hidden` : "");
+    const list = $("bands"); list.replaceChildren();
+    bandsNow.forEach((b, i) => {
+      const tile = bandTile(b.name, b.src);
+      const name = el("input", { type: "text", value: b.name, maxLength: 80 });
+      const saveName = el("button", { disabled: true, title: "Save the new name" }, "Save");
+      name.addEventListener("input", () => { saveName.disabled = !name.value.trim() || name.value.trim() === b.name; });
+      name.addEventListener("keydown", (e) => { if (e.key === "Enter" && !saveName.disabled) saveName.click(); });
+      saveName.addEventListener("click", async () => { saveName.disabled = true; try { await saveBand(b, { name: name.value.trim() }, "Saved"); } catch (e) { toast(e.message); saveName.disabled = false; } });
+      // picture: upload a new one, choose one already uploaded, or none (colour tile)
+      const file = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true });
+      const up = el("button", {}, "Upload picture");
+      const pick = el("button", {}, "Choose uploaded…");
+      const none = el("button", { disabled: !b.src, title: "Use the colour tile instead of a picture" }, "No picture");
+      up.addEventListener("click", () => file.click());
+      file.addEventListener("change", async () => {
+        if (!file.files[0]) return;
+        up.disabled = true; up.textContent = "Uploading…";
+        try { await saveBand(b, { src: await upload(file.files[0], "band", 1000) }, "Picture changed"); }
+        catch (e) { toast(e.message); up.disabled = false; up.textContent = "Upload picture"; }
+      });
+      pick.addEventListener("click", async () => { const src = await pickPicture(`Choose a picture for ${b.name}`); if (src) { try { await saveBand(b, { src }, "Picture changed"); } catch (e) { toast(e.message); } } });
+      none.addEventListener("click", async () => { try { await saveBand(b, { src: "" }, "Now a colour tile"); } catch (e) { toast(e.message); } });
+      const vis = el("input", { type: "checkbox", checked: b.visible });
+      vis.addEventListener("change", async () => {
+        vis.disabled = true;
+        try { await saveBand(b, { visible: vis.checked }, vis.checked ? "Back on the site" : "Hidden from the site (still saved here)"); }
+        catch (e) { vis.checked = b.visible; vis.disabled = false; toast(e.message); }
+      });
+      const left = el("button", { title: "Move earlier", disabled: i === 0 }, "←");
+      const right = el("button", { title: "Move later", disabled: i === bandsNow.length - 1 }, "→");
+      const del = el("button", { class: "danger" }, "Remove");
+      const move = (to) => { const ids = bandsNow.map((x) => x.id); ids.splice(i, 1); ids.splice(to, 0, b.id); saveBandOrder(ids); };
+      left.addEventListener("click", () => move(i - 1));
+      right.addEventListener("click", () => move(i + 1));
+      del.addEventListener("click", async () => {
+        if (!confirm(`Take ${b.name} off the list?\n\nTo keep it here but off the site, untick "Show on the site" instead.`)) return;
+        try { const d = await api(`/api/admin/bands/${b.id}`, { method: "DELETE" }); bandsNow = d.bands; renderBands(); toast("Removed"); } catch (e) { toast(e.message); }
+      });
+      const li = el("li", { class: "gitem" + (b.visible ? "" : " is-hidden") },
+        tile, el("span", { class: "num" }, `#${i + 1} `, el("span", { class: "off" }, "· Hidden from the site")),
+        el("div", { class: "row", style: "margin:0;gap:6px;flex-wrap:nowrap" }, name, saveName),
+        el("div", { class: "pics" }, up, pick, none, file),
+        el("label", { class: "check" }, vis, "Show on the site"),
+        el("div", { class: "row" }, left, right, del));
+      li.dataset.id = b.id;
+      // drag by the tile (so the name box still selects text normally)
+      const stopDrag = () => { li.draggable = false; li.classList.remove("dragging"); };
+      tile.addEventListener("pointerdown", () => { li.draggable = true; document.addEventListener("pointerup", stopDrag, { once: true }); });
+      li.addEventListener("dragstart", (e) => {
+        if (!li.draggable) { e.preventDefault(); return; }
+        li.classList.add("dragging"); e.dataTransfer.setData("text/plain", String(b.id)); e.dataTransfer.effectAllowed = "move";
+      });
+      li.addEventListener("dragend", stopDrag);
+      li.addEventListener("dragover", (e) => { e.preventDefault(); li.classList.add("over"); });
+      li.addEventListener("dragleave", () => li.classList.remove("over"));
+      li.addEventListener("drop", (e) => {
+        e.preventDefault(); li.classList.remove("over");
+        const from = Number(e.dataTransfer.getData("text/plain")); if (!from || from === b.id) return;
+        const ids = bandsNow.map((x) => x.id); const fromAt = ids.indexOf(from), toAt = ids.indexOf(b.id);
+        if (fromAt < 0 || toAt < 0) return;
+        ids.splice(fromAt, 1); ids.splice(toAt, 0, from); saveBandOrder(ids);
+      });
+      list.append(li);
+    });
+  }
+  let newBandSrc = "";
+  $("b-file").addEventListener("change", () => { newBandSrc = ""; });
+  $("b-pick").addEventListener("click", async () => {
+    const src = await pickPicture("Choose a picture for the new band");
+    if (!src) return;
+    newBandSrc = src; $("b-file").value = "";
+    $("b-msg").className = "msg"; $("b-msg").textContent = "Picture chosen.";
+  });
+  $("b-add").addEventListener("click", async () => {
+    const btn = $("b-add"), msg = $("b-msg"), name = $("b-name").value.trim();
+    if (!name) { msg.className = "msg err"; msg.textContent = "Type the band's name first."; return; }
+    btn.disabled = true; msg.className = "msg"; msg.textContent = "Adding…";
+    try {
+      let src = newBandSrc;
+      if ($("b-file").files[0]) { msg.textContent = "Uploading picture…"; src = await upload($("b-file").files[0], "band", 1000); }
+      const d = await api("/api/admin/bands", { method: "POST", json: { name, src, visible: true } });
+      bandsNow = d.bands; renderBands();
+      $("b-name").value = ""; $("b-file").value = ""; newBandSrc = "";
+      msg.className = "msg ok"; msg.textContent = `Added ${name} at the end. Drag it to move it.`;
+      $("bands").lastElementChild?.scrollIntoView({ block: "center", behavior: "smooth" });
+    } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
+    finally { btn.disabled = false; }
+  });
+
   // ---------- song requests and the songs we play ----------
   let songsNow = [], knownNow = [];
   function setSongData(d) { songsNow = d.songs; knownNow = d.known; renderSongs(); renderKnown(); }
@@ -554,9 +683,9 @@
   // ---------- start ----------
   // Each admin page has its own address (/admin/flyers, /admin/gallery, /admin/requests, /admin/songs-we-play);
   // they're all this one file (the Worker serves it for each), showing just that page's section.
-  const PAGES = { flyers: "Flyers", gallery: "Gallery", requests: "Song requests", "songs-we-play": "Songs we play" };
+  const PAGES = { flyers: "Flyers", gallery: "Gallery", bands: "Bands", requests: "Song requests", "songs-we-play": "Songs we play" };
   const slug = location.pathname.replace(/^\/admin\/?/, "").replace(/\/$/, "");
-  const pageKey = { "": "flyers", flyers: "flyers", gallery: "gallery", requests: "requests", "songs-we-play": "played" }[slug] || "flyers";
+  const pageKey = { "": "flyers", flyers: "flyers", gallery: "gallery", bands: "bands", requests: "requests", "songs-we-play": "played" }[slug] || "flyers";
   document.title = `${PAGES[slug] || "Flyers"} · AudioVox Admin`;
   document.querySelectorAll("[data-page]").forEach((n) => {
     if (n.tagName === "A") { n.classList.toggle("is-on", n.dataset.page === pageKey); if (n.dataset.page === pageKey) n.setAttribute("aria-current", "page"); }
@@ -568,10 +697,11 @@
       const d = await api("/api/admin/state");
       $("who").textContent = d.email;
       today = d.today || new Date().toISOString().slice(0, 10);
-      flyersNow = d.flyers; gallery = d.gallery;
+      flyersNow = d.flyers; gallery = d.gallery; bandsNow = d.bands || [];
       if (pageKey === "flyers") renderFlyers(d.flyers);
       if (pageKey === "gallery") renderGallery();
-      if ((pageKey === "flyers" || pageKey === "gallery") && !d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
+      if (pageKey === "bands") renderBands();
+      if (["flyers", "gallery", "bands"].includes(pageKey) && !d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
       $("app").hidden = false;
       if (pageKey === "requests" || pageKey === "played") {
         try { setSongData(await api("/api/admin/songs")); }

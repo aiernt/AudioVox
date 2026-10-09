@@ -1,4 +1,5 @@
 // ---------- Bands we cover ----------
+// Managed from the admin page now (/admin/bands). This list is only the fallback used if the server can't.
 const BANDS = [
   { artist: "Stone Temple Pilots", image: "stone-temple-pilots.jpg" },
   { artist: "Harvey Danger", image: "harvey-danger.jpg" },
@@ -100,8 +101,15 @@ BANDS.forEach(({ artist, image }) => {
   if (image) bandImages[artist] = image;
 });
 
+// The band tiles are normally built into the page by the server, from the list in the admin page
+// (data-filled="1"). The BANDS list above is only used if that couldn't happen.
 const coverBandsGrid = document.getElementById("cover-bands-grid");
-if (coverBandsGrid) {
+if (coverBandsGrid && coverBandsGrid.dataset.filled) {
+  coverBandsGrid.querySelectorAll(".cover-band-photo").forEach((photo) => {
+    if (photo.complete && !photo.naturalWidth) photo.remove();
+    else photo.addEventListener("error", () => photo.remove());
+  });
+} else if (coverBandsGrid) {
   COVER_BANDS.forEach((band) => {
     const li = document.createElement("li");
     li.className = "cover-band-art";
@@ -125,7 +133,8 @@ if (coverBandsGrid) {
     li.appendChild(name);
     coverBandsGrid.appendChild(li);
   });
-
+}
+if (coverBandsGrid) {
   // On touch devices (no real hover), reveal each tile's full color as it
   // scrolls into view instead of requiring a tap. Desktop keeps :hover.
   if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) {

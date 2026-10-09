@@ -119,7 +119,7 @@ export default {
       return handleMedia(request, env, ctx);
     }
     // Admin pages: every /admin/<page> address is admin.html, which shows that page (behind Cloudflare Access, like /admin)
-    if (/^\/admin\/(flyers|gallery|requests|songs-we-play)\/?$/.test(pathname)) {
+    if (/^\/admin\/(flyers|gallery|bands|requests|songs-we-play)\/?$/.test(pathname)) {
       return env.ASSETS.fetch(new Request(new URL("/admin", request.url), request));
     }
     if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
