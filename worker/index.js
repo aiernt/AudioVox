@@ -1,7 +1,7 @@
 // Cloudflare Worker entry point (see wrangler.jsonc).
 //
 // The site itself is plain static files served by Workers Static Assets. This
-// script only runs for /api/*, /media/* and the home page (/, see homePage in media.js):
+// script only runs for /api/*, /media/*, the admin pages (/admin/*) and the home page (/, see homePage in media.js):
 //   POST /api/booking  receives the booking form and relays it to the band's
 //                      internal inbox through Resend (https://resend.com)
 //   /api/songs*        the shared song-request list (see songs.js)
@@ -117,6 +117,10 @@ export default {
     }
     if (pathname === "/api/media" || pathname.startsWith("/api/admin/") || pathname.startsWith("/media/")) {
       return handleMedia(request, env, ctx);
+    }
+    // Admin pages: every /admin/<page> address is admin.html, which shows that page (behind Cloudflare Access, like /admin)
+    if (/^\/admin\/(flyers|gallery|requests|songs-we-play)\/?$/.test(pathname)) {
+      return env.ASSETS.fetch(new Request(new URL("/admin", request.url), request));
     }
     if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) {
       return homePage(request, env);

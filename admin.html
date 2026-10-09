@@ -5,17 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
 <title>AudioVox Admin</title>
-<link rel="icon" href="favicon.ico" sizes="48x48 32x32">
+<link rel="icon" href="/favicon.ico" sizes="48x48 32x32">
 <style>
   :root{--bg:#f6f6f4;--card:#fff;--ink:#1d1d1f;--muted:#6b6b70;--line:#dcdcdf;--red:#c8102e;--ok:#1a7f37;}
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
-  header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;background:#1d1d1f;color:#fff;}
-  header b{font-size:1.1rem;letter-spacing:.02em;}
-  header nav a{color:#ddd;margin-left:16px;text-decoration:none;font-size:.9rem;}
-  header nav a:hover{color:#fff;text-decoration:underline;}
+  /* header: stays at the top while scrolling; one link per admin page */
+  header{position:sticky;top:0;z-index:15;display:flex;align-items:stretch;gap:4px 22px;flex-wrap:wrap;padding:0 22px;background:#1d1d1f;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+  header a{text-decoration:none;}
+  header .brand{display:flex;align-items:center;color:#fff;font-weight:700;font-size:1.1rem;letter-spacing:.02em;padding:12px 0;}
+  header .pages{display:flex;align-items:stretch;gap:2px;flex:1;}
+  header .pages a{display:flex;align-items:center;padding:0 12px;color:#cfcfd2;font-size:.95rem;border-bottom:3px solid transparent;}
+  header .pages a:hover{color:#fff;background:rgba(255,255,255,.06);}
+  header .pages a.is-on{color:#fff;border-bottom-color:var(--red);font-weight:600;}
+  header .out{display:flex;align-items:center;gap:16px;font-size:.85rem;}
+  header .out a{color:#bbb;}
+  header .out a:hover{color:#fff;text-decoration:underline;}
+  #who{color:#8e8e93;}
+  @media (max-width:860px){
+    header{padding:0 14px;}
+    header .pages{order:3;flex-basis:100%;overflow-x:auto;margin:0 -14px;padding:0 6px;}
+    header .pages a{padding:10px 10px 9px;white-space:nowrap;}
+    header .out{margin-left:auto;gap:12px;}
+    #who{display:none;}
+  }
+  @media (max-width:560px){
+    header .brand{font-size:1rem;padding:10px 0;}
+    header .out{gap:10px;font-size:.8rem;}
+    header .out .opt{display:none;}   /* the song page is still linked from the Song requests page */
+  }
   main{max-width:1100px;margin:0 auto;padding:22px;}
-  h2{margin:28px 0 6px;font-size:1.3rem;}
+  h2{margin:8px 0 6px;font-size:1.4rem;}
   .hint{color:var(--muted);margin:0 0 14px;font-size:.9rem;}
   .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;}
   .flyers{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start;}
@@ -34,10 +54,6 @@
   .dates{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;}
   .status{margin:10px 0 0;padding:6px 10px;border-radius:4px;background:#eef6f0;color:var(--ok);font-size:.85rem;}
   .status.off{background:#f1f1ef;color:var(--muted);}
-  /* section links under the header */
-  .jump{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:.9rem;margin:0 0 4px;}
-  .jump a{color:var(--red);}
-  h2{scroll-margin-top:12px;}
   /* song tables */
   .tbl-wrap{overflow-x:auto;padding:0;margin-top:12px;}
   .tbl{width:100%;border-collapse:collapse;font-size:.9rem;}
@@ -99,46 +115,59 @@
 </head>
 <body>
 <header>
-  <b>AudioVox Admin</b>
-  <nav><span id="who" style="color:#aaa;font-size:.85rem"></span><a href="/" target="_blank">View site</a><a href="/song-requests" target="_blank">Song requests</a><a href="/cdn-cgi/access/logout">Sign out</a></nav>
+  <a class="brand" href="/admin/flyers">AudioVox Admin</a>
+  <nav class="pages" aria-label="Admin pages">
+    <a href="/admin/flyers" data-page="flyers">Flyers</a>
+    <a href="/admin/gallery" data-page="gallery">Gallery</a>
+    <a href="/admin/requests" data-page="requests">Song requests</a>
+    <a href="/admin/songs-we-play" data-page="played">Songs we play</a>
+  </nav>
+  <nav class="out"><span id="who"></span><a href="/" target="_blank">View site &#8599;</a><a class="opt" href="/song-requests" target="_blank">Song page &#8599;</a><a href="/cdn-cgi/access/logout">Sign out</a></nav>
 </header>
 
 <main id="app" hidden>
-  <nav class="jump"><a href="#flyers-h">Flyers</a><a href="#gallery-h">Gallery</a><a href="#songs-h">Song requests</a><a href="#known-h">Songs we play</a></nav>
-  <h2 id="flyers-h">Flyers</h2>
-  <p class="hint">The flyers sit in two piles on the home page, left and right. The top flyer in each pile is in front; the ones under it peek out behind at an angle. Clicking any flyer on the site opens them all full size. Give a flyer its show date and its stamp (like ROCKED!) appears by itself the day after the show; give it a take-down date and it comes off the site that day. Changes show on the site straight away.</p>
-  <div class="flyers" id="flyers"></div>
+  <section data-page="flyers" hidden>
+    <h2>Flyers</h2>
+    <p class="hint">The flyers sit in two piles on the home page, left and right. The top flyer in each pile is in front; the ones under it peek out behind at an angle. Clicking any flyer on the site opens them all full size. Give a flyer its show date and its stamp (like ROCKED!) appears by itself the day after the show; give it a take-down date and it comes off the site that day. Changes show on the site straight away.</p>
+    <div class="flyers" id="flyers"></div>
+  </section>
 
-  <h2 id="gallery-h">Gallery</h2>
-  <p class="hint">The photos in the &ldquo;Live Shots&rdquo; carousel. Drag photos to change the order (or use the arrows). Big photos are shrunk automatically before uploading. A yellow border means the photo has no description yet. Untick &ldquo;Show in the carousel&rdquo; to keep a photo here without showing it on the site.</p>
-  <div class="card upload">
-    <input type="file" id="g-files" accept="image/jpeg,image/png,image/webp" multiple>
-    <button class="primary" id="g-upload">Upload photos</button>
-    <span class="or">or</span>
-    <button id="g-pick">Add from uploaded pictures&hellip;</button>
-    <span class="msg" id="g-msg"></span>
-  </div>
-  <ul class="gallery" id="gallery"></ul>
+  <section data-page="gallery" hidden>
+    <h2>Gallery</h2>
+    <p class="hint">The photos in the &ldquo;Live Shots&rdquo; carousel. Drag photos to change the order (or use the arrows). Big photos are shrunk automatically before uploading. A yellow border means the photo has no description yet. Untick &ldquo;Show in the carousel&rdquo; to keep a photo here without showing it on the site.</p>
+    <div class="card upload">
+      <input type="file" id="g-files" accept="image/jpeg,image/png,image/webp" multiple>
+      <button class="primary" id="g-upload">Upload photos</button>
+      <span class="or">or</span>
+      <button id="g-pick">Add from uploaded pictures&hellip;</button>
+      <span class="msg" id="g-msg"></span>
+    </div>
+    <ul class="gallery" id="gallery"></ul>
+  </section>
 
-  <h2 id="songs-h">Song requests <span class="hint" id="s-count"></span></h2>
-  <p class="hint">Songs fans have asked for on the <a href="/song-requests" target="_blank">Songs We Should Learn</a> page, most votes first. &ldquo;We learned it&rdquo; adds the song to <a href="#known-h">Songs we play</a> (so it can't be requested again) and takes it off this list.</p>
-  <div class="card upload">
-    <button id="s-export">Download the list (spreadsheet)</button>
-    <button id="s-test">Send a test email</button>
-    <span class="msg" id="s-msg"></span>
-  </div>
-  <div class="card tbl-wrap"><table class="tbl" id="s-table"></table></div>
+  <section data-page="requests" hidden>
+    <h2>Song requests <span class="hint" id="s-count"></span></h2>
+    <p class="hint">Songs fans have asked for on the <a href="/song-requests" target="_blank">Songs We Should Learn</a> page, most votes first. &ldquo;We learned it&rdquo; adds the song to <a href="/admin/songs-we-play">Songs we play</a> (so it can't be requested again) and takes it off this list.</p>
+    <div class="card upload">
+      <button id="s-export">Download the list (spreadsheet)</button>
+      <button id="s-test">Send a test email</button>
+      <span class="msg" id="s-msg"></span>
+    </div>
+    <div class="card tbl-wrap"><table class="tbl" id="s-table"></table></div>
+  </section>
 
-  <h2 id="known-h">Songs we play <span class="hint" id="k-count"></span></h2>
-  <p class="hint">Fans can't request these; the song page says &ldquo;We play this one!&rdquo; instead. A song is matched by its title, so cover versions by other bands are caught too. For common titles (like &ldquo;Black&rdquo; or &ldquo;Higher&rdquo;), tick &ldquo;Artist must match&rdquo; so only that band's song is blocked.</p>
-  <div class="card known-add">
-    <div><label for="k-song">Song</label><input type="text" id="k-song" maxlength="200"></div>
-    <div><label for="k-artist">Artist</label><input type="text" id="k-artist" maxlength="200"></div>
-    <label class="check"><input type="checkbox" id="k-strict"> Artist must match</label>
-    <button class="primary" id="k-add">Add song</button>
-  </div>
-  <div class="row"><input type="search" id="k-filter" placeholder="Find a song in the list&hellip;" style="max-width:340px"></div>
-  <div class="card tbl-wrap"><table class="tbl" id="k-table"></table></div>
+  <section data-page="played" hidden>
+    <h2>Songs we play <span class="hint" id="k-count"></span></h2>
+    <p class="hint">Fans can't request these; the song page says &ldquo;We play this one!&rdquo; instead. A song is matched by its title, so cover versions by other bands are caught too. For common titles (like &ldquo;Black&rdquo; or &ldquo;Higher&rdquo;), tick &ldquo;Artist must match&rdquo; so only that band's song is blocked.</p>
+    <div class="card known-add">
+      <div><label for="k-song">Song</label><input type="text" id="k-song" maxlength="200"></div>
+      <div><label for="k-artist">Artist</label><input type="text" id="k-artist" maxlength="200"></div>
+      <label class="check"><input type="checkbox" id="k-strict"> Artist must match</label>
+      <button class="primary" id="k-add">Add song</button>
+    </div>
+    <div class="row"><input type="search" id="k-filter" placeholder="Find a song in the list&hellip;" style="max-width:340px"></div>
+    <div class="card tbl-wrap"><table class="tbl" id="k-table"></table></div>
+  </section>
 </main>
 <div class="denied card" id="denied" hidden></div>
 <div class="picker" id="picker" hidden>
@@ -523,15 +552,31 @@
   });
 
   // ---------- start ----------
+  // Each admin page has its own address (/admin/flyers, /admin/gallery, /admin/requests, /admin/songs-we-play);
+  // they're all this one file (the Worker serves it for each), showing just that page's section.
+  const PAGES = { flyers: "Flyers", gallery: "Gallery", requests: "Song requests", "songs-we-play": "Songs we play" };
+  const slug = location.pathname.replace(/^\/admin\/?/, "").replace(/\/$/, "");
+  const pageKey = { "": "flyers", flyers: "flyers", gallery: "gallery", requests: "requests", "songs-we-play": "played" }[slug] || "flyers";
+  document.title = `${PAGES[slug] || "Flyers"} · AudioVox Admin`;
+  document.querySelectorAll("[data-page]").forEach((n) => {
+    if (n.tagName === "A") { n.classList.toggle("is-on", n.dataset.page === pageKey); if (n.dataset.page === pageKey) n.setAttribute("aria-current", "page"); }
+    else n.hidden = n.dataset.page !== pageKey;
+  });
   (async () => {
     try {
+      // Every page loads the site state (it says who's signed in; flyers and gallery also use it for the picture library)
       const d = await api("/api/admin/state");
-      $("who").textContent = `Signed in: ${d.email}`;
-      if (!d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
+      $("who").textContent = d.email;
       today = d.today || new Date().toISOString().slice(0, 10);
-      renderFlyers(d.flyers); gallery = d.gallery; renderGallery();
+      flyersNow = d.flyers; gallery = d.gallery;
+      if (pageKey === "flyers") renderFlyers(d.flyers);
+      if (pageKey === "gallery") renderGallery();
+      if ((pageKey === "flyers" || pageKey === "gallery") && !d.uploads) toast("Photo storage isn't set up yet, so uploads won't work.");
       $("app").hidden = false;
-      try { setSongData(await api("/api/admin/songs")); } catch (e) { $("s-msg").className = "msg err"; $("s-msg").textContent = "Couldn't load the song lists: " + e.message; }
+      if (pageKey === "requests" || pageKey === "played") {
+        try { setSongData(await api("/api/admin/songs")); }
+        catch (e) { const m = $(pageKey === "requests" ? "s-msg" : "k-count"); m.className = "msg err"; m.textContent = "Couldn't load the song lists: " + e.message; }
+      }
     } catch (e) {
       const box = $("denied"); box.hidden = false;
       box.append(el("h2", { style: "margin-top:0" }, "Not signed in"), el("p", {}, e.status === 403 ? "This page is only for the band. Please sign in again." : e.message));
