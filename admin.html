@@ -6,6 +6,9 @@
 <meta name="robots" content="noindex, nofollow">
 <title>AudioVox Admin</title>
 <link rel="icon" href="/favicon.ico" sizes="48x48 32x32">
+<!-- Cropper.js: the crop window for uploads -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 <style>
   :root{--bg:#f6f6f4;--card:#fff;--ink:#1d1d1f;--muted:#6b6b70;--line:#dcdcdf;--red:#c8102e;--ok:#1a7f37;}
   *{box-sizing:border-box;}
@@ -121,6 +124,25 @@
   .pitem.can-pick:hover{border-color:var(--red);}
   .pitem .row{margin-top:2px;gap:6px;}
   .pitem button{padding:4px 9px;font-size:.82rem;}
+  /* crop window */
+  .crop-box{width:min(1100px,100%);max-height:94vh;}
+  .crop-main{display:flex;gap:16px;padding:14px 16px 6px;min-height:0;}
+  .crop-stage{flex:1;min-width:0;height:min(62vh,560px);background:#2a2a2d;border-radius:4px;overflow:hidden;}
+  .crop-stage img{display:block;max-width:100%;}
+  .crop-side{width:220px;flex:none;}
+  /* Cropper.js fits the preview to the crop's shape inside this 200x200 frame */
+  .crop-preview{overflow:hidden;width:200px;height:200px;border-radius:4px;}
+  .crop-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:8px 16px 12px;}
+  .tool-group{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .crop-tools button{padding:5px 11px;min-width:36px;}
+  .crop-tools button.is-on{background:var(--ink);border-color:var(--ink);color:#fff;}
+  #crop-zoom{width:160px;accent-color:var(--red);}
+  .crop-foot{border-bottom:0;border-top:1px solid var(--line);gap:8px;}
+  @media (max-width:760px){
+    .crop-main{flex-direction:column;padding:10px;}
+    .crop-stage{height:48vh;}
+    .crop-side{display:none;}
+  }
 </style>
 </head>
 <body>
@@ -198,6 +220,25 @@
     <div class="picker-grid" id="picker-grid"></div>
   </div>
 </div>
+<div class="picker" id="cropper" hidden>
+  <div class="picker-box crop-box" role="dialog" aria-modal="true" aria-labelledby="crop-title">
+    <div class="picker-head"><b id="crop-title">Crop the picture</b><span class="hint" id="crop-step" style="margin:0"></span></div>
+    <div class="crop-main">
+      <div class="crop-stage"><img id="crop-img" alt=""></div>
+      <div class="crop-side">
+        <div class="hint" style="margin:0 0 6px">Preview</div>
+        <div id="crop-preview" class="crop-preview"></div>
+        <p class="hint" style="margin:12px 0 0">Drag the picture to move it. Drag the box's corners to change the crop. Zoom with the mouse wheel, a pinch, or the buttons below.</p>
+      </div>
+    </div>
+    <div class="crop-tools">
+      <span class="tool-group"><button id="crop-out" title="Zoom out">&minus;</button><input type="range" id="crop-zoom" min="100" max="500" value="100" aria-label="Zoom"><button id="crop-in" title="Zoom in">+</button></span>
+      <span class="tool-group"><span class="hint" style="margin:0">Shape</span><span id="crop-shapes" class="tool-group"></span></span>
+      <span class="tool-group"><button id="crop-rot-l" title="Rotate left">&#10226;</button><button id="crop-rot-r" title="Rotate right">&#10227;</button><button id="crop-reset">Reset</button></span>
+    </div>
+    <div class="picker-head crop-foot"><button id="crop-cancel">Cancel</button><span style="flex:1"></span><button id="crop-whole">Use the whole picture</button><button class="primary" id="crop-ok">Crop &amp; use</button></div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -227,9 +268,74 @@
     c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
     return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
   }
-  async function upload(file, kind, maxSide = 2000) {
-    const blob = await shrink(file, maxSide);
+  // Upload a picture that's already been cropped/shrunk (a JPEG blob); returns its address
+  async function uploadBlob(blob, kind) {
     return (await api(`/api/admin/upload?kind=${kind}`, { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } })).src;
+  }
+
+  // ---------- crop window: every picture is cropped (or kept whole) before it's uploaded ----------
+  // Uses Cropper.js (loaded in the page head). Zoom with the buttons/slider, the mouse wheel or a pinch; drag the
+  // picture to move it under the crop box, drag the box's edges to resize it. Resolves with a JPEG blob
+  // (longest side maxSide), or null if cancelled.
+  const SHAPES = [["Free", NaN], ["4:3", 4 / 3], ["3:4", 3 / 4], ["1:1", 1], ["16:9", 16 / 9]];
+  function cropPhoto(file, { title = "Crop the picture", step = "", ratio = NaN, maxSide = 2000 } = {}) {
+    return new Promise((resolve) => {
+      if (typeof Cropper === "undefined") { shrink(file, maxSide).then(resolve, () => resolve(null)); return; }   // crop tool didn't load: upload it whole
+      const box = $("cropper"), img = $("crop-img"), url = URL.createObjectURL(file);
+      $("crop-title").textContent = title; $("crop-step").textContent = step;
+      $("crop-cancel").textContent = step ? "Skip this photo" : "Cancel";
+      let cropper = null, base = 1;
+      const zoomSlider = $("crop-zoom");
+      const shapes = $("crop-shapes"); shapes.replaceChildren();
+      const setShape = (r) => {
+        cropper.setAspectRatio(r);
+        shapes.querySelectorAll("button").forEach((b) => b.classList.toggle("is-on", Number(b.dataset.r) === r || (isNaN(r) && b.dataset.r === "NaN")));
+      };
+      SHAPES.forEach(([label, r]) => { const b = el("button", { type: "button" }, label); b.dataset.r = String(r); b.onclick = () => setShape(r); shapes.append(b); });
+      const finish = (v) => {
+        document.removeEventListener("keydown", onKey);
+        if (cropper) cropper.destroy();
+        URL.revokeObjectURL(url); img.removeAttribute("src");
+        box.hidden = true; document.body.classList.remove("picker-open");
+        resolve(v);
+      };
+      const onKey = (e) => { if (e.key === "Escape") finish(null); };
+      document.addEventListener("keydown", onKey);
+      box.hidden = false; document.body.classList.add("picker-open");
+      img.onload = () => {
+        cropper = new Cropper(img, {
+          viewMode: 1, dragMode: "move", autoCropArea: 0.9, aspectRatio: ratio, background: false,
+          toggleDragModeOnDblclick: false, checkOrientation: true, preview: "#crop-preview",
+          ready() {
+            // the slider shows zoom relative to "whole picture fits": 100% = fit, up to 500%
+            base = cropper.getImageData().width / cropper.getImageData().naturalWidth || 1;
+            zoomSlider.value = 100;
+            setShape(ratio);
+          },
+          zoom(e) {
+            const pct = (e.detail.ratio / base) * 100;
+            if (pct < 100) { e.preventDefault(); cropper.zoomTo(base); zoomSlider.value = 100; return; }   // no smaller than "fits"
+            if (pct > 500) { e.preventDefault(); return; }
+            zoomSlider.value = Math.round(pct);
+          },
+        });
+      };
+      img.src = url;
+      zoomSlider.oninput = () => cropper && cropper.zoomTo(base * zoomSlider.value / 100);
+      $("crop-in").onclick = () => cropper && cropper.zoom(0.15);
+      $("crop-out").onclick = () => cropper && cropper.zoom(-0.15);
+      $("crop-rot-l").onclick = () => cropper && cropper.rotate(-90);
+      $("crop-rot-r").onclick = () => cropper && cropper.rotate(90);
+      $("crop-reset").onclick = () => { if (!cropper) return; cropper.reset(); zoomSlider.value = 100; };
+      $("crop-cancel").onclick = () => finish(null);
+      $("crop-whole").onclick = () => { shrink(file, maxSide).then((b) => finish(b), (e) => { toast(e.message); finish(null); }); };
+      $("crop-ok").onclick = () => {
+        if (!cropper) return;
+        const canvas = cropper.getCroppedCanvas({ maxWidth: maxSide, maxHeight: maxSide, fillColor: "#fff", imageSmoothingEnabled: true, imageSmoothingQuality: "high" });
+        if (!canvas) { toast("Couldn't crop that picture."); return; }
+        canvas.toBlob((b) => finish(b), "image/jpeg", 0.85);
+      };
+    });
   }
   const show = (src) => (src.startsWith("/") ? src : "/" + src);
 
@@ -338,17 +444,24 @@
     const endDate = el("input", { type: "date", value: f.end_date || "" });
     const msg = el("span", { class: "msg" });
     const save = el("button", { class: "primary" }, isNew ? "Add flyer" : "Save");
-    file.addEventListener("change", () => { if (file.files[0]) { setPreview(URL.createObjectURL(file.files[0])); msg.className = "msg"; msg.textContent = "Click " + save.textContent + " to use it."; } });
+    let cropped = null;   // the new picture, cropped, waiting for Save
+    file.addEventListener("change", async () => {
+      if (!file.files[0]) return;
+      const blob = await cropPhoto(file.files[0], { title: "Crop the flyer", maxSide: 2000 });
+      if (!blob) { file.value = ""; return; }
+      cropped = blob; setPreview(URL.createObjectURL(blob));
+      msg.className = "msg"; msg.textContent = "Click " + save.textContent + " to use it.";
+    });
     pick.addEventListener("click", async () => {
       const chosen = await pickPicture(`Choose a picture for this flyer`);
       if (!chosen) return;
-      src = chosen; file.value = ""; setPreview(show(chosen));
+      src = chosen; file.value = ""; cropped = null; setPreview(show(chosen));
       msg.className = "msg"; msg.textContent = "Click " + save.textContent + " to use it.";
     });
     save.addEventListener("click", async () => {
       save.disabled = true; msg.className = "msg"; msg.textContent = "Saving…";
       try {
-        if (file.files[0]) { msg.textContent = "Uploading picture…"; src = await upload(file.files[0], "flyer"); file.value = ""; }
+        if (cropped) { msg.textContent = "Uploading picture…"; src = await uploadBlob(cropped, "flyer"); cropped = null; file.value = ""; }
         if (!src) throw new Error("Choose a picture first.");
         if (showDate.value && endDate.value && endDate.value <= showDate.value) throw new Error("The take-down date has to be after the show date.");
         const body = { src, alt: alt.value, stamp: stamp.value, visible: vis.checked, show_date: showDate.value, end_date: endDate.value };
@@ -466,16 +579,21 @@
     const files = [...$("g-files").files]; const msg = $("g-msg"), btn = $("g-upload");
     if (!files.length) { msg.className = "msg err"; msg.textContent = "Choose one or more photos first."; return; }
     btn.disabled = true; msg.className = "msg";
-    let done = 0;
+    let done = 0, skipped = 0;
     try {
-      for (const f of files) {
-        msg.textContent = `Uploading ${done + 1} of ${files.length}…`;
-        const src = await upload(f, "gallery");
+      for (const [i, f] of files.entries()) {
+        // crop each photo first (or keep it whole); skipping one moves on to the next
+        msg.textContent = `Photo ${i + 1} of ${files.length}: crop it…`;
+        const blob = await cropPhoto(f, { title: "Crop the photo", step: files.length > 1 ? `Photo ${i + 1} of ${files.length}` : "", maxSide: 2000 });
+        if (!blob) { skipped++; continue; }
+        msg.textContent = `Uploading ${i + 1} of ${files.length}…`;
+        const src = await uploadBlob(blob, "gallery");
         const d = await api("/api/admin/gallery", { method: "POST", json: { src, alt: "", caption: "" } });
         gallery = d.gallery; done++;
       }
       renderGallery(); $("g-files").value = "";
-      msg.className = "msg ok"; msg.textContent = `Added ${done} photo${done === 1 ? "" : "s"} to the end. Add a description to each.`;
+      msg.className = done ? "msg ok" : "msg";
+      msg.textContent = (done ? `Added ${done} photo${done === 1 ? "" : "s"} to the end. Add a description to each.` : "Nothing added.") + (skipped ? ` (${skipped} skipped)` : "");
     } catch (e) { renderGallery(); msg.className = "msg err"; msg.textContent = `${done} uploaded, then: ${e.message}`; }
     finally { btn.disabled = false; }
   });
@@ -522,8 +640,11 @@
       up.addEventListener("click", () => file.click());
       file.addEventListener("change", async () => {
         if (!file.files[0]) return;
+        const blob = await cropPhoto(file.files[0], { title: `Crop the picture for ${b.name}`, ratio: 4 / 3, maxSide: 1000 });
+        file.value = "";
+        if (!blob) return;
         up.disabled = true; up.textContent = "Uploading…";
-        try { await saveBand(b, { src: await upload(file.files[0], "band", 1000) }, "Picture changed"); }
+        try { await saveBand(b, { src: await uploadBlob(blob, "band") }, "Picture changed"); }
         catch (e) { toast(e.message); up.disabled = false; up.textContent = "Upload picture"; }
       });
       pick.addEventListener("click", async () => { const src = await pickPicture(`Choose a picture for ${b.name}`); if (src) { try { await saveBand(b, { src }, "Picture changed"); } catch (e) { toast(e.message); } } });
@@ -571,12 +692,18 @@
       list.append(li);
     });
   }
-  let newBandSrc = "";
-  $("b-file").addEventListener("change", () => { newBandSrc = ""; });
+  let newBandSrc = "", newBandBlob = null;
+  $("b-file").addEventListener("change", async () => {
+    newBandSrc = ""; newBandBlob = null;
+    const f = $("b-file").files[0]; if (!f) return;
+    const blob = await cropPhoto(f, { title: "Crop the band's picture", ratio: 4 / 3, maxSide: 1000 });
+    if (!blob) { $("b-file").value = ""; return; }
+    newBandBlob = blob; $("b-msg").className = "msg"; $("b-msg").textContent = "Picture cropped.";
+  });
   $("b-pick").addEventListener("click", async () => {
     const src = await pickPicture("Choose a picture for the new band");
     if (!src) return;
-    newBandSrc = src; $("b-file").value = "";
+    newBandSrc = src; newBandBlob = null; $("b-file").value = "";
     $("b-msg").className = "msg"; $("b-msg").textContent = "Picture chosen.";
   });
   $("b-add").addEventListener("click", async () => {
@@ -585,10 +712,10 @@
     btn.disabled = true; msg.className = "msg"; msg.textContent = "Adding…";
     try {
       let src = newBandSrc;
-      if ($("b-file").files[0]) { msg.textContent = "Uploading picture…"; src = await upload($("b-file").files[0], "band", 1000); }
+      if (newBandBlob) { msg.textContent = "Uploading picture…"; src = await uploadBlob(newBandBlob, "band"); }
       const d = await api("/api/admin/bands", { method: "POST", json: { name, src, visible: true } });
       bandsNow = d.bands; renderBands();
-      $("b-name").value = ""; $("b-file").value = ""; newBandSrc = "";
+      $("b-name").value = ""; $("b-file").value = ""; newBandSrc = ""; newBandBlob = null;
       msg.className = "msg ok"; msg.textContent = `Added ${name} at the end. Drag it to move it.`;
       $("bands").lastElementChild?.scrollIntoView({ block: "center", behavior: "smooth" });
     } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
